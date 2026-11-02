@@ -26,11 +26,12 @@
 
 ### 代表作
 
-| [![幸福感最低的一年](examples/douyin-happiness-u.jpg)](examples/douyin-happiness-u.jpg) | [![没赢够 6 次](examples/douyin-winner-effect.jpg)](examples/douyin-winner-effect.jpg) | [![富兰克林效应](examples/douyin-franklin-effect.jpg)](examples/douyin-franklin-effect.jpg) |
+| [![幸福感最低的一年](examples/douyin-happiness-u.jpg)](https://www.douyin.com/video/7700211164583873834) | [![没赢够 6 次](examples/douyin-winner-effect.jpg)](https://www.douyin.com/video/7699389178563300651) | [![富兰克林效应](examples/douyin-franklin-effect.jpg)](https://www.douyin.com/video/7700210236262567168) |
 |:---:|:---:|:---:|
 | **你人生中幸福感最低的一年，会是几岁？** | **总觉得自己不如别人？你可能只是没赢够 6 次** | **想让一个人喜欢你，富兰克林效应有多神？** |
 | 78 秒 · 23.1 万播放 | 66 秒 · 9.9 万播放 | 71 秒 · 1.3 万播放 |
 | 7,053 次分享 · 2,537 条评论 | 1,441 次收藏 · 带来 102 个关注 | 373 赞 · 178 次收藏 |
+| [▶ 在抖音观看](https://www.douyin.com/video/7700211164583873834) | [▶ 在抖音观看](https://www.douyin.com/video/7699389178563300651) | [▶ 在抖音观看](https://www.douyin.com/video/7700210236262567168) |
 
 数据截至 2026-11-02。同一套流水线也做出过几十播放的片子：流量主要由选题和开头 3 秒决定，工具负责把成品质量稳定在同一个水平。
 

@@ -26,11 +26,12 @@ On 2026-10-20 a new Douyin account was started with this skill's Douyin mode. No
 
 ### Showcase
 
-| [![The least happy year](examples/douyin-happiness-u.jpg)](examples/douyin-happiness-u.jpg) | [![Six wins](examples/douyin-winner-effect.jpg)](examples/douyin-winner-effect.jpg) | [![Franklin effect](examples/douyin-franklin-effect.jpg)](examples/douyin-franklin-effect.jpg) |
+| [![The least happy year](examples/douyin-happiness-u.jpg)](https://www.douyin.com/video/7700211164583873834) | [![Six wins](examples/douyin-winner-effect.jpg)](https://www.douyin.com/video/7699389178563300651) | [![Franklin effect](examples/douyin-franklin-effect.jpg)](https://www.douyin.com/video/7700210236262567168) |
 |:---:|:---:|:---:|
 | **At what age is your life least happy?** | **Feel you're worse than everyone? Maybe you just haven't won 6 times** | **Want someone to like you? How the Franklin effect works** |
 | 78 s · 231K views | 66 s · 99K views | 71 s · 13K views |
 | 7,053 shares · 2,537 comments | 1,441 saves · 102 new followers | 373 likes · 178 saves |
+| [▶ Watch on Douyin](https://www.douyin.com/video/7700211164583873834) | [▶ Watch on Douyin](https://www.douyin.com/video/7699389178563300651) | [▶ Watch on Douyin](https://www.douyin.com/video/7700210236262567168) |
 
 Numbers as of 2026-11-02. The same pipeline has also produced videos with a few dozen views: reach is mostly decided by the topic and the first 3 seconds; the tool keeps the finished quality at a steady level.
 
