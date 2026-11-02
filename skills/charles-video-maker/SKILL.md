@@ -1,7 +1,8 @@
 ---
 name: charles-video-maker
 description: >-
-  Make videos with code, and explain ideas with machines. Three outputs in one skill:
+  Make videos with code, and explain ideas with machines. Also the Douyin knowledge-video mode: remake a trending 抖音 video
+  end to end without stopping, and find trending topics for it (「做抖音视频」「复刻这条抖音」「用某某风格做一期抖音」「找抖音选题」「抓 Vibe 热点」). Three outputs in one skill:
   (1) code-rendered videos — Canvas / HTML-CSS-SVG / WebGL / Three.js / Remotion / HyperFrames / Manim pages that draw frame t,
   rendered frame by frame with Playwright + FFmpeg, with three plans and previews before building, code-synthesized sound,
   and a voiceover pipeline that turns a written script into a narrated vertical short (TTS sped up to 1.25x, word-level alignment,
@@ -31,6 +32,7 @@ description: >-
 |---|---|---|
 | 一条视频（宣传片、动效、知识讲解、文字稿转视频） | 下面的视频流程（第 0–6 步） | 本文件 |
 | 一张插图 / 交互图 / 原理图（给文档、博客、落地页用），不是视频 | Anatomy 的流程，产出 HTML、SVG 或 React 组件 | `anatomy/SKILL.md`，kit 在 `anatomy/kit/` |
+| 抖音视频（「做抖音视频」「复刻这条」、给了抖音链接或原片、「用 <风格名> 做一期」；「找选题」「抓热点」「Vibe 有什么在火」先走其中的 D-1 找选题） | 复刻爆款、一锅出：蒸馏原片风格 → 重写文案 → 先测配乐再排画面 → 交付，中途不问，覆盖下面流程的多项默认值 | `references/douyin-remake.md` |
 | 一条讲原理的视频，概念能对应到一台会动的机器 | 先按 Anatomy 造机器，再按视频流程配音、包装、渲染 | `references/anatomy-video.md` |
 
 用户嫌画面全是插图、不够精美，或者手上有原视频、要讲的是产品或游戏：照样走视频流程，开工四选的「画面」选「素材打底」，见 [references/footage-layer.md](references/footage-layer.md)。
@@ -45,15 +47,20 @@ Opus 自己不输出视频。这个 skill 让它写一个会自己动的网页�
 
 一句话提示词做视频是在抽卡：出来什么样、为什么这样、下次能不能再做出来，都不可控。这个 skill 的做法是**先把规划摆到用户面前，确认了再动手**：三个方案（每个都写清封面和开头黄金几秒）→ 每个方案一张关键帧或几秒预览 → 用户确认 → 写成 `brief.md` → 从封面和开头做起，按 brief 逐镜头制作、逐镜头自检 → 交付成片、封面图和发布文案。
 
+## 文案一律交给本地 Gemini 写
+
+旁白稿、画面关键词、标题、简介、tags——所有给人听、给人看的文字，都由本地 Gemini（Antigravity CLI `agy`）来写，Claude 不亲手写（用户 2026-10-22 定：Claude 写的旁白太僵硬）。分工是 **Claude 管事实和结构，Gemini 管说法**：Claude 写任务单 `copy/brief.json`（查实的事实、每句的时长上限、这句出现时画面在演什么、对标原片的口播），跑 `python3 scripts/gemini_copy.py gen` 生成，再跑 `check` 做硬校验（字数塞不塞得进时长、有没有编数字、标题和 tags 规则、标点）；事实或听感有问题就写进反馈让 Gemini 重写，最多两轮，不自己改它的措辞。完整流程、任务单格式和提示词见 [references/gemini-copy.md](references/gemini-copy.md)。
+
 ## 工作目录
 
-在当前目录下建 `opus-video/<slug>/`，所有东西放在里面：
+默认建在 `~/Desktop/video/<slug>/`（没有这个目录时，在当前目录下建 `video/<slug>/`），所有东西放在里面：
 
 ```
-opus-video/<slug>/
+video/<slug>/
   source/        用户给的原材料、参考视频抽帧、分析笔记
   previews/      三个方案的预览（plan-a.png / plan-b.mp4 ...）
   brief.md       用户确认后的完整方案，也是可以复用的提示词
+  copy/          文案：brief.json（给 Gemini 的任务单）、copy.json（Gemini 写的稿）、feedback.txt
   index.html     成片的画面代码（或 Remotion / HyperFrames / Manim 工程）
   audio/         合成的配乐、音效、配音
   qa/            自检用的静帧和抽帧图
@@ -70,7 +77,9 @@ opus-video/<slug>/
 
 ## 第 1 步：问清楚要做什么
 
-**先问开工四选。** 用 AskUserQuestion 一次问完：画面（默认代码画面，可选素材打底，或 Lemo 风格库里的一种）、规格（默认竖版短视频 1080×1920 / 30fps，可选横版短片 1920×1080 / 24fps）、配音（默认 Gemini，可选 edge-tts / Kokoro / 不配音）、流程（默认三个方案加预览，可选只问一次就开拍）。每项第一个选项是默认值，标「（推荐）」；用户已经说清楚的项不问。每个选项具体改什么、怎么准备，见 [references/lemo-styles.md](references/lemo-styles.md)；选了素材打底，按 [references/footage-layer.md](references/footage-layer.md) 准备素材（要下载原片、录需要登录的网站，先问用户）。选了 Lemo 画风或 Kokoro 时，马上在后台跑 `sh scripts/lemo/setup.sh deps`（首次要几分钟）。
+抖音视频不走第 1–3 步，按 [references/douyin-remake.md](references/douyin-remake.md) 一路做到交付。
+
+**先问开工四选。** 用 AskUserQuestion 一次问完：画面（默认代码画面，可选素材打底，或 Lemo 风格库里的一种）、规格（默认竖版短视频 1080×1920 / 30fps，可选横版短片 1920×1080 / 24fps）、配音（默认 Gemini，额度用完时自动切后备男声男播报员；可选 edge-tts / Kokoro / 不配音）、流程（默认三个方案加预览，可选只问一次就开拍）。每项第一个选项是默认值，标「（推荐）」；用户已经说清楚的项不问。每个选项具体改什么、怎么准备，见 [references/lemo-styles.md](references/lemo-styles.md)；选了素材打底，按 [references/footage-layer.md](references/footage-layer.md) 准备素材（要下载原片、录需要登录的网站，先问用户）。选了 Lemo 画风或 Kokoro 时，马上在后台跑 `sh scripts/lemo/setup.sh deps`（首次要几分钟）。
 
 先问用户想做什么，接受三种原材料，给了哪种就用哪种，可以混着给：
 
@@ -80,7 +89,7 @@ opus-video/<slug>/
 
 用户给了现成的音乐时，先运行 `python3 scripts/audio_tools.py beats <音乐文件> > source/beats.json` 测出节拍、重拍和鼓点，方案和分镜都按这张节拍表来排。
 
-开工四选之外，只追问会改变方案的信息，一次最多问 3 个：时长、有没有指定的品牌色或字体、必须出现的事实或画面。画幅、帧率、配音按开工四选来；其余用户没说的用合理默认值（30–60 秒、代码合成配乐；有配音时默认 1.25 倍速，见 craft-rules.md 声音一节），在方案里写明，让用户改。开头第一句默认写成一句暴论（前 5 秒内说完，见 opening-and-cover.md）。
+开工四选之外，只追问会改变方案的信息，一次最多问 3 个：时长、有没有指定的品牌色或字体、必须出现的事实或画面。画幅、帧率、配音按开工四选来；其余用户没说的用合理默认值（30–60 秒、代码合成配乐；有配音时默认 1.25 倍速，见 craft-rules.md 声音一节），在方案里写明，让用户改。开头第一句的方向（反差、具体数字或问题，前 5 秒内说完，见 opening-and-cover.md）写进文案任务单，由 Gemini 来写。
 
 处理原材料：
 
@@ -139,6 +148,7 @@ opus-video/<slug>/
 - 配乐要真乐器时（Lemo 画风默认如此），先用 `scripts/voice/score.py` 按预设写 `audio/score.wav`，再 `mix.py --score audio/score.wav`，见 lemo-styles.md。
 - 声音：音效用 `python3 scripts/audio_tools.py sfx timeline.json audio/sfx.wav` 按时间点合成，混好后 `audio_tools.py normalize` 到 -14 LUFS，再用 `audio_tools.py check audio/mix.wav --out qa/audio` 看响度和波形图。
 - 屏上文字多的片子，渲正式版前跑一次阅读时长检查：`cd "$LIB" && node core/render/readcheck.mjs <工程绝对路径> --size 1080x1920 --step 0.1`，BAD 的条目延长停留或删字（需要风格库，见 lemo-styles.md）。
+- 静止检查：`python3 scripts/still_check.py out/<主题名>.mp4 --subs audio/subs.srt` 报出画面超过 2 秒不动的时间段和字幕换了画面没跟的句子，有就回去给那几秒加动作再重渲（标准见 craft-rules.md 自检打分）。
 - 每个场景搭完后，用 `python3 scripts/qa_stills.py index.html audio/timeline.json qa/scenes.png` 出「第 0 帧 + 每个场景最满状态」的拼图，先看这张再渲整片。
 - 验收：`python3 scripts/analyze_video.py out/<主题名>.mp4 --out qa/final` 出抽帧图，再加一张手机尺寸的（`--cell-width 360`）。按 craft-rules.md 的「自检打分」给自己打分（「开场」一项按 opening-and-cover.md 的自检清单打），列出最严重的 3 个问题和时间点，改完只重渲那几秒，重复到每项 8 分以上，再对照验收清单核对。把每一轮的分数和问题记在 `qa/review_log.md` 里，交付时一起给用户。
 - 有问题就回到对应镜头修，只重渲那一段也可以（`--start` / `--duration`），最后再整片合成。
@@ -147,7 +157,7 @@ opus-video/<slug>/
 
 成片和封面图按主题命名，不同主题的视频文件名不能重复，**不要叫 `final.mp4`**：
 
-1. 渲正式版之前先写好 `out/publish.txt`（格式见下）。
+1. 渲正式版之前先写好 `out/publish.txt`（格式见下）：标题、简介、tags 取自 Gemini 写好并通过 `check` 的 `copy/copy.json`。
 2. 用它的标题生成文件名：`NAME=$(python3 scripts/topic_name.py out/publish.txt)`，去掉空格、标点换成「-」，比如「AI 提问模板：说清四件事，一次写对」→ `AI提问模板-说清四件事-一次写对`。
 3. 成片 `out/$NAME.mp4`，封面图 `out/$NAME-封面.png`（导出方法见 opening-and-cover.md，视频第一帧就是这张封面）。
 4. 同一系列的几集，标题本身就要不一样（写上各自的主题），文件名才不会撞；同一主题的旧版要留着时，加后缀（`-无配音版`、`-横版`）。

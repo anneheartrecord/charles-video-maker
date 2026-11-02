@@ -19,6 +19,7 @@ ap.add_argument('--dir', default='.')
 ap.add_argument('--music', type=float, default=.32, help='music level under the voice (0 = no music)')
 ap.add_argument('--bpm', type=float, default=96)
 ap.add_argument('--score', help='mono WAV to use as the music bed instead of the synthesized lo-fi (score.py writes one)')
+ap.add_argument('--open-boost', type=float, default=0, help='dB to push the music up in the first 3 s, barely ducked (Douyin: the opening is the strongest part); mastering then keeps the level difference (master_static.py)')
 args = ap.parse_args()
 os.chdir(args.dir)
 TL = json.load(open('audio/timeline.json'))
@@ -143,6 +144,9 @@ if args.score:
     bed = np.zeros(n); add(bed, 0, s_)
 else:
     bed = music * .9 + drums * .55 + crackle * .5
+if args.open_boost:
+    tt = np.arange(n) / SR; w_ = np.clip((3.6 - tt) / .6, 0, 1)
+    duck = duck * (1 - w_) + np.maximum(duck, .85) * w_; bed = bed * (1 + (10 ** (args.open_boost / 20) - 1) * w_)
 mix = bed * duck * args.music + sfx * .5 + voice
 mix = mix[:int(DUR * SR)]
 fade = int(1.2 * SR); mix[-fade:] *= np.linspace(1, 0, fade)
@@ -154,8 +158,12 @@ with wave.open('audio/mix_raw.wav', 'wb') as w:
 # loudness -14 LUFS, then limit: AAC encoding adds up to ~0.8 dB of true peak, so leave room for it
 os.makedirs('qa', exist_ok=True)
 tools = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'audio_tools.py')
-subprocess.run(['python3', tools, 'normalize', 'audio/mix_raw.wav', 'audio/mix_norm.wav'], check=True, capture_output=True)
-subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', 'audio/mix_norm.wav', '-af', 'volume=-0.8dB,alimiter=limit=0.8:level=false', 'audio/mix.wav'], check=True)
+if args.open_boost:   # single-pass loudnorm would flatten the louder opening; static gain + peak limiter keeps it
+    subprocess.run([os.path.expanduser('~/lemo-opuscar/.venv/bin/python'), os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'master_static.py')], cwd='audio', check=True)
+    open('audio/mix_norm.wav', 'w').close()
+else:
+    subprocess.run(['python3', tools, 'normalize', 'audio/mix_raw.wav', 'audio/mix_norm.wav'], check=True, capture_output=True)
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', 'audio/mix_norm.wav', '-af', 'volume=-0.8dB,alimiter=limit=0.8:level=false', 'audio/mix.wav'], check=True)
 for f in ('audio/mix_raw.wav', 'audio/mix_norm.wav'):
     os.remove(f)
 print(subprocess.run(['python3', tools, 'check', 'audio/mix.wav', '--out', 'qa/audio'], capture_output=True, text=True).stdout.splitlines()[0])

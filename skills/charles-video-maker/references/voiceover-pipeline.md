@@ -2,14 +2,14 @@
 
 有旁白的视频（知识讲解、口播稿转视频）按这条线做。核心思路：**旁白整段合成，用逐字时间戳让画面去对旁白**，场景切换、画面动作、字幕全部用稿子里的原话定位。
 
-模板在 `templates/vertical-explainer/`（竖版 1080×1920，第 0 帧是封面、场景淡入淡出、底部一行硬字幕），把整个目录拷到 `opus-video/<slug>/` 再改。
+模板在 `templates/vertical-explainer/`（竖版 1080×1920，第 0 帧是封面、场景淡入淡出、底部一行硬字幕），把整个目录拷到 `~/Desktop/video/<slug>/` 再改。
 
 ## 命令顺序
 
 下面 `$S` 是本 skill 的目录，命令都在项目目录里跑。
 
 ```bash
-# 1. 旁白：audio/narration.txt，一段一行，纯文本；有事实就先建核对表（见 fact-check.md）
+# 1. 旁白：由 Gemini 写（gemini_copy.py gen / check，见 gemini-copy.md），把 copy.json 的 lines 一段一行写进 audio/narration.txt；有事实就先建核对表（见 fact-check.md）
 python3 $S/scripts/factcheck.py extract audio/narration.txt source/factcheck.md
 # 2. 合成并加速（默认 1.25 倍）；后端按开工四选：默认 Gemini，--backend edge（免费、联网）或 --backend kokoro（离线，见 lemo-styles.md）
 python3 $S/scripts/voice/tts.py audio/narration.txt audio/voice.wav
@@ -27,6 +27,14 @@ python3 $S/scripts/factcheck.py gate source/factcheck.md --narration audio/narra
 python3 $S/scripts/render_parallel.py index.html "out/$NAME.mp4" --size 1080x1920 --fps 30 --duration <timeline.json 的 total> --audio audio/mix.wav
 python3 $S/scripts/render.py "index.html?cover=1" "out/$NAME-封面.png" --still <开头印章落下之后的秒数> --size 1080x1920
 ```
+
+## Gemini 额度用完时：后备男声（2026-10-26 用户定）
+
+Gemini TTS 免费档一天大约 10 次整段合成，按美国太平洋时间零点重置，对应北京时间 15:00 或 16:00。多集并行很容易用完。用完时 Gemini 返回 429，`tts.py` 会自动改走后备：用REDACTED（backup 同款）调 MiniMax speech-2.8-hd，音色是男播报员 `Chinese (Mandarin)_Male_Announcer`，并按测好的 1.44 倍加速到和 Charon 一样的语速。一集大约花 0.2 美元。
+
+- 需要本机 `REDACTED` 已登录（从 REDACTED 读 dev 网关 key，不落盘），还需要 `REDACTED` 能连 REDACTED（自动 port-forward）。
+- 不想切就加 `--no-fallback`；想直接用后备就 `--backend backup`。其他候选音色在 `tts.py` 的 `backup_VOICES` 里，试听在 `~/Desktop/REDACTED/`。
+- 同一集只用一个声音。用后备声音合成的那集，在 report 里注明。
 
 ## scenes.json
 

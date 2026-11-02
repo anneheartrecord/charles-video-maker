@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **画面** | 代码画面（讲解模板 / 自由设计 / Anatomy 机器） | 素材打底：实录、原片引用、空镜、生成补位，代码只做信息层（见 footage-layer.md）；或 Lemo 风格库里的一种：按题材推荐两三种，并附全部风格列表 | 素材打底按 footage-layer.md 备素材和合成；Lemo 风格在方案的「风格」一栏写 `Lemo · <风格名>`，制作按它的 `STYLE.md` |
 | **规格** | 竖版短视频：1080×1920，30fps，30–60 秒，第一帧是封面、前 5 秒一句暴论、硬字幕 | 横版短片：1920×1080，24fps，30–60 秒，电影节奏（Lemo 的默认值，3 秒内有钩子，节奏有快有慢、留一次呼吸） | 渲染的 `--size` 和 `--fps`；横版的开场规则见下文「横版短片」 |
-| **配音** | Gemini（`gemini-3.8-flash-tts`，音色 Charon，1.25 倍速） | edge-tts（免费，要联网）／Kokoro（离线，英文好，中文偏平）／不配音 | `tts.py --backend gemini｜edge｜kokoro`；不配音就跳过配音流水线 |
+| **配音** | Gemini（`gemini-3.8-flash-tts`，音色 Charon，1.25 倍速；额度用完自动切后备男声男播报员） | edge-tts（免费，要联网）／Kokoro（离线，英文好，中文偏平）／不配音 | `tts.py --backend gemini｜backup｜edge｜kokoro`；不配音就跳过配音流水线 |
 | **流程** | 三个方案加预览，用户确认后再做 | 只问一次就开拍（Lemo 式）：写一份 `TREATMENT.md` 就直接做，中途不停 | 选后者就跳过第 2–3 步，见下文「只问一次」 |
 
 配乐不单独问。默认用代码合成的 lo-fi；选了 Lemo 画风，或者题材明显需要别的乐器时，改用真乐器配乐（见下文），并在方案的「声音」一栏写明。
@@ -55,6 +55,7 @@ sh "$LIB/core/render/mux.sh" "<工程>/out/video.mp4" "<工程>/audio/mix.wav" "
 | 后端 | 命令 | 说明 |
 |---|---|---|
 | Gemini（默认） | `tts.py audio/narration.txt audio/voice.wav` | 需要 `GEMINI_API_KEY`，中文最自然 |
+| 后备男声 | `… --backend backup [--voice "Chinese (Mandarin)_Male_Announcer"]` | Gemini 返回 429 时自动启用；MiniMax 男播报员，走REDACTED，一集约 0.2 美元，要 REDACTED 登录和 REDACTED的 REDACTED，见 voiceover-pipeline.md |
 | edge-tts | `… --backend edge [--voice zh-CN-YunxiNeural]` | 免费，要联网 |
 | Kokoro | `… --backend kokoro [--voice zm_yunxi]` | 离线，走风格库的 Kokoro；英文很好，中文偏平 |
 
