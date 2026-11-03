@@ -1,24 +1,15 @@
 ---
 name: charles-video-maker
 description: >-
-  Make videos with code, and explain ideas with machines. Also the Douyin knowledge-video mode: remake a trending 抖音 video
-  end to end without stopping, and find trending topics for it (「做抖音视频」「复刻这条抖音」「用某某风格做一期抖音」「找抖音选题」「抓 Vibe 热点」). Three outputs in one skill:
-  (1) code-rendered videos — Canvas / HTML-CSS-SVG / WebGL / Three.js / Remotion / HyperFrames / Manim pages that draw frame t,
-  rendered frame by frame with Playwright + FFmpeg, with three plans and previews before building, code-synthesized sound,
-  and a voiceover pipeline that turns a written script into a narrated vertical short (TTS sped up to 1.25x, word-level alignment,
-  hard subtitles, cover-first opening, fact-check gate, parallel rendering, cover image and publish copy);
-  (2) Anatomy figures — crafted, highly detailed, interactive isometric SVG figures that explain a technical idea as a real
-  physical object (lock, gauge, plotter, engine), with optional WebGL shaders and a 3D mode;
-  (3) machine-explainer videos — an Anatomy machine driven by a virtual clock and narration cues, wrapped into a narrated video.
-  A footage layer puts real material under the code layer: screen recordings of a product or game, quotes cut from a
-  source video with their own sound, royalty-free b-roll (Pexels / Pixabay) and generated stills, graded and cut on cues.
-  Optionally draws in one of the 53 styles of the Lemo-Opuscar library (impasto oil, watercolor, ukiyo-e, ink wash,
-  pixel RPG, satellite briefing, teardown ...) with sampled-instrument scores, Kokoro / edge-tts / Gemini voices and a reading-time check.
-  Use whenever someone wants to make, animate or render a video, motion graphic, explainer, promo, kinetic typography, pixel-art
-  or UI motion piece, turn an article or script into a video, or wants an isometric illustration, explanatory figure, interactive
-  explainer or technical drawing of how something works — including Chinese requests like「做个视频」「用代码做视频」「做个动效」
-  「把这篇文章做成视频」「文字稿转视频」「口播稿做成视频」「画个原理图」「做个等距插图」「用机器讲清楚这个概念」「做个油画风 / 水彩 / 浮世绘 / 水墨风的短片」「用原片 / 实录 / 空镜做视频」「画面不要全是插图」.
-  For a named Lemo-Opuscar style, prefer this skill over lemo-opuscar when the user wants a narrated vertical short.
+  Make videos with code and explain ideas with machines: code-rendered videos (Canvas / SVG / WebGL / Three.js /
+  Remotion / Manim via Playwright + FFmpeg), narrated vertical shorts from a script, isometric Anatomy figures and
+  machine-explainer videos, optionally over real footage or in one of the 53 Lemo-Opuscar art styles. Also the
+  Douyin mode: remake a trending 抖音 video end to end and find topics for it. Use whenever someone wants to make,
+  animate or render a video, motion graphic, explainer or promo, turn an article or script into a video, or draw
+  how something works, including「做抖音视频」「复刻这条抖音」「用某某风格做一期抖音」「找抖音选题」「抓 Vibe 热点」
+  「做个视频」「用代码做视频」「做个动效」「把这篇文章做成视频」「文字稿转视频」「口播稿做成视频」「画个原理图」
+  「做个等距插图」「用机器讲清楚这个概念」「做个油画风 / 水彩 / 浮世绘 / 水墨风的短片」「用原片 / 实录 / 空镜做视频」
+  「画面不要全是插图」. For a named Lemo-Opuscar style as a narrated vertical short, prefer this over lemo-opuscar.
   Not for generating footage with video models, editing in Premiere/CapCut/AE, or subtitling an existing video.
 ---
 
