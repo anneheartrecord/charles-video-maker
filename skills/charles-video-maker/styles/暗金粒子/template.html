@@ -1,0 +1,251 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+html,body{margin:0;background:#000;overflow:hidden;width:100vw;height:100vh}
+canvas{display:block;position:absolute;inset:0}
+#ov{position:absolute;inset:0;pointer-events:none;font-family:"PingFang SC",sans-serif}
+.vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 46%,rgba(0,0,0,0) 45%,rgba(0,0,0,.78) 100%)}
+.serif{font-family:"Songti SC","Noto Serif SC",serif;font-weight:900}
+.gold{background:linear-gradient(180deg,#ffe7a8 0%,#f2b44a 55%,#b9771f 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 18px rgba(255,170,60,.45))}
+#big{position:absolute;left:50%;top:15%;transform:translate(-50%,0);font-size:190px;letter-spacing:6px;white-space:nowrap}
+#ring{position:absolute;left:50%;top:27%;width:420px;height:420px;border-radius:50%;border:6px solid rgba(255,214,140,.9);box-shadow:0 0 40px rgba(255,170,60,.6);opacity:0}
+#tag{position:absolute;left:72px;top:58px;font-size:26px;color:#d9a85a;letter-spacing:4px;white-space:nowrap}
+#tag small{display:block;font-size:15px;color:#8a7350;letter-spacing:6px;margin-top:6px;font-family:"PingFang SC";font-weight:500}
+#dims{position:absolute;left:1290px;top:300px;width:260px}
+.dim{height:40px;display:flex;align-items:center;gap:14px;font-size:24px;color:#efe3c8;white-space:nowrap}
+.dim i{font-style:normal;font-family:"Songti SC";font-weight:900;color:#e7a948;font-size:20px;width:30px;text-align:right}
+#avg{position:absolute;left:420px;top:360px;font-size:92px;white-space:nowrap}
+#avg small{display:block;font-size:20px;letter-spacing:8px;color:#9b8460;font-family:"PingFang SC";font-weight:500;margin-top:10px;-webkit-text-fill-color:#9b8460}
+#cockpit{position:absolute;left:1240px;top:400px;font-size:86px;white-space:nowrap}
+.chk{position:absolute;width:150px;height:150px;transform:translate(-50%,-50%)}
+.chk span{position:absolute;left:166px;top:50%;transform:translateY(-50%);font-size:26px;color:#f3d79c;white-space:nowrap;letter-spacing:2px}
+#scan{position:absolute;top:150px;bottom:250px;width:3px;background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,236,190,.95),rgba(255,255,255,0));box-shadow:0 0 24px 6px rgba(255,200,110,.45)}
+#sub{position:absolute;left:0;right:0;bottom:78px;text-align:center;font-size:44px;font-weight:600;color:#fff;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,.95)}
+#sub b{color:#f5b84f;font-weight:700}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<div id="ov">
+  <div class="vig"></div>
+  <div id="big" class="serif gold">4063</div>
+  <div id="ring"></div>
+  <div id="tag" class="serif"></div>
+  <div id="dims"></div>
+  <div id="avg" class="serif gold">平均人<small>每一项都落在中间</small></div>
+  <div id="cockpit" class="serif gold">驾驶舱</div>
+  <div id="scan"></div>
+  <div id="ck1" class="chk"><svg viewBox="0 0 150 150" width="150" height="150"><circle cx="75" cy="75" r="62" fill="none" stroke="#f5b84f" stroke-width="5"/><path d="M45 78 L67 99 L106 54" fill="none" stroke="#ffe3a0" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>飞行员</span></div>
+  <div id="ck2" class="chk"><svg viewBox="0 0 150 150" width="150" height="150"><circle cx="75" cy="75" r="62" fill="none" stroke="#f5b84f" stroke-width="5"/><path d="M45 78 L67 99 L106 54" fill="none" stroke="#ffe3a0" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>飞机</span></div>
+  <div id="sub"></div>
+</div>
+<script src="three.iife.js"></script>
+<script>
+// 暗金粒子风格样片：平均人开头 14.6 秒。画面只由 t 决定，随机数带种子。
+const W = innerWidth, H = innerHeight, N = 4063;
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const eout = k => 1 - Math.pow(1 - k, 3);
+const spring = (x, w = 14, z = .55) => x <= 0 ? 0 : 1 - Math.exp(-z * w * x) * (Math.cos(w * Math.sqrt(1 - z * z) * x) + z / Math.sqrt(1 - z * z) * Math.sin(w * Math.sqrt(1 - z * z) * x));
+const rnd = s => { s = Math.sin(s * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const lerp = (a, b, k) => a + (b - a) * k;
+const $ = id => document.getElementById(id);
+
+// ---------- shapes: draw a filled silhouette on a 2D canvas, sample N points (dense rim + sparse fill) ----------
+function sample(draw, scale, seed, rim = .5) {
+  const S = 600, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineCap = g.lineJoin = 'round'; draw(g, S);
+  const d = g.getImageData(0, 0, S, S).data, inside = (x, y) => x >= 0 && y >= 0 && x < S && y < S && d[(y * S + x) * 4 + 3] > 128;
+  const fill = [], edge = [];
+  for (let y = 0; y < S; y += 2) for (let x = 0; x < S; x += 2) if (inside(x, y)) {
+    (inside(x - 4, y) && inside(x + 4, y) && inside(x, y - 4) && inside(x, y + 4) ? fill : edge).push([x, y]);
+  }
+  const out = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const src = rnd(seed + i * 1.37) < rim ? edge : fill, p = src[Math.floor(rnd(seed + i * 7.91) * src.length)];
+    const jx = (rnd(seed + i * 3.1) - .5) * 2, jy = (rnd(seed + i * 5.3) - .5) * 2;
+    out[i * 3] = (p[0] + jx - S / 2) / S * scale; out[i * 3 + 1] = -(p[1] + jy - S / 2) / S * scale; out[i * 3 + 2] = (rnd(seed + i * 9.7) - .5) * .25;
+  }
+  return out;
+}
+const pilot = sample((g) => {           // standing pilot, front view
+  g.beginPath(); g.arc(300, 92, 42, 0, 7); g.fill();
+  g.fillRect(283, 128, 34, 30);
+  g.beginPath(); g.moveTo(210, 168); g.lineTo(390, 168); g.lineTo(372, 330); g.lineTo(360, 352); g.lineTo(240, 352); g.lineTo(228, 330); g.closePath(); g.fill();
+  g.lineWidth = 40; g.beginPath(); g.moveTo(222, 186); g.lineTo(196, 280); g.lineTo(186, 362); g.stroke();
+  g.beginPath(); g.moveTo(378, 186); g.lineTo(404, 280); g.lineTo(414, 362); g.stroke();
+  g.lineWidth = 50; g.beginPath(); g.moveTo(268, 350); g.lineTo(262, 440); g.lineTo(258, 540); g.stroke();
+  g.beginPath(); g.moveTo(332, 350); g.lineTo(338, 440); g.lineTo(342, 540); g.stroke();
+}, 7.2, 11, .55);
+const jet = sample((g) => {             // straight-wing jet, side view (late-1940s silhouette)
+  g.beginPath(); g.ellipse(300, 300, 230, 34, 0, 0, 7); g.fill();
+  g.beginPath(); g.moveTo(70, 300); g.lineTo(28, 296); g.lineTo(70, 288); g.fill();
+  g.beginPath(); g.ellipse(170, 268, 52, 24, 0, Math.PI, 0); g.fill();
+  g.beginPath(); g.moveTo(450, 280); g.lineTo(520, 168); g.lineTo(552, 168); g.lineTo(530, 290); g.fill();
+  g.beginPath(); g.moveTo(250, 312); g.lineTo(360, 312); g.lineTo(330, 372); g.lineTo(290, 372); g.fill();
+  g.beginPath(); g.moveTo(470, 300); g.lineTo(560, 300); g.lineTo(548, 322); g.lineTo(478, 318); g.fill();
+}, 8.0, 23, .5);
+const qmark = sample((g, S) => { g.font = '900 470px "Songti SC", serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('？', S / 2 + 60, S / 2 + 20); }, 6.4, 37, .35);
+const seat = sample((g) => {            // ejection seat, side view, inside the cockpit box
+  g.save(); g.translate(300, 300); g.rotate(-.2);
+  g.fillRect(-30, -210, 64, 260); g.fillRect(-40, -260, 84, 54);
+  g.restore();
+  g.fillRect(250, 330, 190, 46); g.fillRect(270, 376, 28, 120); g.fillRect(400, 376, 28, 120); g.fillRect(232, 492, 220, 22);
+  g.lineWidth = 12; g.beginPath(); g.moveTo(470, 470); g.lineTo(500, 300); g.stroke(); g.beginPath(); g.arc(502, 290, 16, 0, 7); g.fill();
+  g.fillRect(520, 488, 60, 16);
+}, 6.6, 41, .55);
+const grid = new Float32Array(N * 3);   // 4063 pilots standing in formation
+for (let i = 0; i < N; i++) {
+  const c = i % 67, r = Math.floor(i / 67);
+  grid[i * 3] = (c - 33) * .26 + (rnd(i * 2.3) - .5) * .05; grid[i * 3 + 1] = -1.6; grid[i * 3 + 2] = (r - 30) * .26 + (rnd(i * 4.1) - .5) * .05;
+}
+const duo = new Float32Array(N * 3);    // pilot (left) and jet (right) side by side for the check
+for (let i = 0; i < N; i++) {
+  const L = i % 2 === 0, src = L ? pilot : jet, s = L ? .62 : .5;
+  duo[i * 3] = src[i * 3] * s + (L ? -3.1 : 3.0); duo[i * 3 + 1] = src[i * 3 + 1] * s + (L ? .2 : .35); duo[i * 3 + 2] = src[i * 3 + 2];
+}
+
+// ---------- three.js scene ----------
+const renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.setClearColor(0x020203, 1);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38, W / H, .1, 200);
+const geo = new THREE.BufferGeometry(), pos = new Float32Array(N * 3), bri = new Float32Array(N), siz = new Float32Array(N);
+for (let i = 0; i < N; i++) siz[i] = .7 + rnd(i * 13.7) * .9;
+geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('bri', new THREE.BufferAttribute(bri, 1)); geo.setAttribute('siz', new THREE.BufferAttribute(siz, 1));
+const glowMat = (extra = {}) => new THREE.ShaderMaterial({
+  uniforms: { uRed: { value: 0 }, uSize: { value: 30 }, ...extra }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `attribute float bri; attribute float siz; varying float vB; uniform float uSize;
+    void main(){ vec4 mv = modelViewMatrix * vec4(position,1.); gl_Position = projectionMatrix * mv; gl_PointSize = uSize * siz / -mv.z; vB = bri; }`,
+  fragmentShader: `varying float vB; uniform float uRed;
+    void main(){ float d = length(gl_PointCoord - .5); float a = smoothstep(.5, .0, d); float core = smoothstep(.16, .0, d);
+      vec3 gold = mix(vec3(1., .62, .2), vec3(1., .22, .12), uRed);
+      gl_FragColor = vec4(gold * pow(a, 1.6) * .9 * vB + vec3(1., .95, .82) * core * 1.1 * vB, 1.); }`,
+});
+const pts = new THREE.Points(geo, glowMat()); scene.add(pts);
+// dust in the dark
+const dg = new THREE.BufferGeometry(), dp = new Float32Array(600 * 3), db = new Float32Array(600), ds = new Float32Array(600);
+for (let i = 0; i < 600; i++) { dp[i * 3] = (rnd(i * 1.1) - .5) * 60; dp[i * 3 + 1] = (rnd(i * 2.2) - .5) * 34; dp[i * 3 + 2] = -6 - rnd(i * 3.3) * 30; db[i] = .12 + rnd(i * 4.4) * .25; ds[i] = .6 + rnd(i * 5.5); }
+dg.setAttribute('position', new THREE.BufferAttribute(dp, 3)); dg.setAttribute('bri', new THREE.BufferAttribute(db, 1)); dg.setAttribute('siz', new THREE.BufferAttribute(ds, 1));
+const dust = new THREE.Points(dg, glowMat()); dust.material.uniforms.uSize.value = 260; scene.add(dust);
+// thin white lines: measurement ticks, the "average" template, the cockpit box, the ground
+const lineMat = () => new THREE.LineBasicMaterial({ color: 0xfff1d6, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+const ticks = [];
+const tickY = [2.98, 1.2, .24, -.6, .6, -.48, 1.92, -.24, -1.2, -.84];   // world heights on the pilot, in the order the narration lists them
+tickY.forEach((y, k) => { const m = lineMat(); const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1.75, y, .2), new THREE.Vector3(1.75, y, .2)]), m); scene.add(l); ticks.push(l); });
+const tmplMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: .12, gapSize: .1, transparent: true, opacity: 0, depthWrite: false });
+const tmpl = (() => {                   // outline of the "average man": a symmetric box-and-circle figure
+  const s = 7.2 / 600, P = (x, y) => new THREE.Vector3((x - 300) * s, -(y - 300) * s, .3);
+  const pathPts = [P(283, 130), P(210, 168), P(186, 362), P(228, 362), P(240, 352), P(240, 545), P(282, 545), P(300, 360), P(318, 545), P(360, 545), P(360, 352), P(372, 362), P(414, 362), P(390, 168), P(317, 130)];
+  const g = new THREE.BufferGeometry().setFromPoints(pathPts); const l = new THREE.Line(g, tmplMat); l.computeLineDistances(); scene.add(l);
+  const hg = new THREE.BufferGeometry().setFromPoints(Array.from({ length: 41 }, (_, k) => { const a = k / 40 * Math.PI * 2; return new THREE.Vector3(Math.cos(a) * 46 * s, (-(92 - 300) + Math.sin(a) * 46) * s, .3); }));
+  const h = new THREE.Line(hg, tmplMat); h.computeLineDistances(); scene.add(h); return [l, h];
+})();
+const boxMat = lineMat();
+const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(9.5, 6.2, 5.5)), boxMat); box.position.set(.2, .1, -1.2); scene.add(box);
+const canopy = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 33 }, (_, k) => { const a = k / 32 * Math.PI; return new THREE.Vector3(Math.cos(a) * 4.75 + .2, Math.sin(a) * 1.6 + 3.2, 1.55); })), boxMat); scene.add(canopy);
+const groundMat = lineMat();
+const ground = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-30, -3.4, 0), new THREE.Vector3(30, -3.4, 0)]), groundMat); scene.add(ground);
+
+// ---------- timeline (seconds, from the published voice track) ----------
+const SUBS = [[.32, 1.62, '<b>4063</b> 名飞行员'], [1.66, 3.16, '每人量 <b>10</b> 项身材'], [3.2, 5.28, '只为找出一个最标准的<b>平均人</b>'], [5.32, 5.84, '你猜'], [5.88, 7.1, '最后找到了<b>几个</b>'],
+  [7.14, 8.4, '上世纪 <b>40</b> 年代末'], [8.44, 9.68, '美国空军的飞机<b>接连出事</b>'], [9.72, 11.0, '查来查去'], [11.04, 11.86, '飞行员<b>没问题</b>'], [11.9, 13.18, '飞机也<b>没问题</b>'], [13.22, 14.6, '问题出在<b>驾驶舱</b>']];
+const DIMS = ['身高', '胸围', '袖长', '裆高', '躯干围', '臀围', '颈围', '腰围', '大腿围', '裆长'];
+$('dims').innerHTML = DIMS.map((d, k) => `<div class="dim"><i>${String(k + 1).padStart(2, '0')}</i>${d}</div>`).join('');
+// state machine: each state has target positions and a camera; morphs take 1.0 s with a per-point stagger
+const ST = [
+  { t: -9, P: grid, cam: [0, 1.6, 11.5], look: [0, -.6, -4] },
+  { t: 1.62, P: pilot, cam: [0, .2, 13.6], look: [0, -.55, 0] },
+  { t: 5.25, P: grid, cam: [0, 3.0, 12.2], look: [0, -1.5, -2.5] },
+  { t: 7.0, P: jet, cam: [0, .4, 13.5], look: [0, .4, 0] },
+  { t: 9.62, P: duo, cam: [0, .3, 14.5], look: [0, .3, 0] },
+  { t: 12.9, P: seat, cam: [-1.2, 1.4, 15], look: [0, 0, -1] },
+];
+const MORPH = 1.0, STAG = .35;
+// the reversal beat: rows of the formation go out while the counter falls 4063 -> 2, then dark, hold, slam "?"
+const FUNNEL = [4063, 1055, 302, 143, 73, 28, 12, 6, 3, 2], F0 = 5.62, FSTEP = .095, DARK = 6.6, SLAM = 6.86;
+const aliveAt = t => FUNNEL[Math.max(0, Math.min(FUNNEL.length - 1, Math.floor((t - F0) / FSTEP) + 1))] * (t >= F0 ? 1 : 1e9);
+const rank = new Float32Array(N); for (let i = 0; i < N; i++) rank[i] = rnd(i * 31.7) * N;
+const morphTime = s => s === 3 ? .7 : MORPH;
+function jetXform(p, t, i) {            // the jet flies in, then dives at "接连出事"
+  const k = clamp((t - 7.0) / 2.6), dive = ease(clamp((t - 8.44) / 1.1));
+  let x = p[0] + lerp(-1.6, .6, k), y = p[1] + Math.sin(t * 2.1) * .08, z = p[2];
+  const a = -.42 * dive, cx = .6, cy = 0; const dx = x - cx, dy = y - cy;
+  x = cx + dx * Math.cos(a) - dy * Math.sin(a); y = cy + dx * Math.sin(a) + dy * Math.cos(a) - 1.4 * dive * dive;
+  if (dive > 0 && rnd(i * 3.7) < .16) { const f = dive * (1.5 + rnd(i * 1.9) * 2.5); x -= f * (.6 + rnd(i * 2.9)); y += f * (rnd(i * 4.9) - .3) * .8; }   // debris trail
+  return [x, y, z];
+}
+function target(s, i, t) {
+  const P = ST[s].P, p = [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]];
+  if (ST[s].P === jet) return jetXform(p, t, i);
+  if (ST[s].P === grid) { const w = Math.sin(p[0] * .55 + p[2] * .35 - t * 3.2); return [p[0], p[1] + .12 * w * clamp((t - .3) / .4), p[2]]; }
+  if (ST[s].P === seat) return [p[0] - .3, p[1] - .2, p[2] - 1];
+  return p;
+}
+function stateAt(t) { let s = 0; for (let k = 1; k < ST.length; k++) if (t >= ST[k].t) s = k; return s; }
+function vec(a, b, k) { return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)]; }
+
+window.render = t => {
+  const s = stateAt(t), t0 = ST[s].t;
+  for (let i = 0; i < N; i++) {
+    const del = rnd(i * 17.3) * (s === 2 ? .15 : STAG), k = s === 0 ? 1 : ease(clamp((t - t0 - del) / (s === 2 ? .45 : morphTime(s))));
+    let p = target(s, i, t);
+    if (k < 1) {
+      const q = target(s - 1, i, t), sw = Math.sin(Math.PI * k) * (1.2 + rnd(i * 6.1) * 1.4);
+      p = vec(q, p, k); p[0] += sw * (rnd(i * 8.3) - .5); p[1] += sw * (rnd(i * 9.1) - .5); p[2] += sw * (rnd(i * 2.7) - .5) * 1.5;
+    }
+    const tw = .75 + .25 * Math.sin(t * (2 + rnd(i * 3.3) * 3) + i);
+    pos[i * 3] = p[0] + Math.sin(t * 1.3 + i) * .015; pos[i * 3 + 1] = p[1] + Math.cos(t * 1.1 + i * .7) * .015; pos[i * 3 + 2] = p[2];
+    let b = tw * (s === 0 ? .95 : 1);
+    if (s === 2) {                       // filter: a point dies when the count drops below its rank; it flashes, then goes out
+      const A = aliveAt(t), dieT = rank[i] < A ? 1e9 : F0 + FSTEP * FUNNEL.findIndex(n => rank[i] >= n) - FSTEP;
+      if (t > dieT) { const d = t - dieT; b *= d < .06 ? 2.2 : Math.max(0, 1 - (d - .06) / .12) * .5; p[1] -= Math.min(d, .4) * .6; }
+      if (rank[i] < 2 && t > F0 + .9) b *= 2.4;   // the last two keep glowing
+      b *= 1 - .85 * clamp((t - DARK) / .2) * (1 - clamp((t - SLAM) / .08));   // dark, hold, then light comes back with the slam
+      pos[i * 3 + 1] = p[1];
+    }
+    if (s === 3 && rank[i] >= 2) b *= clamp((t - t0 - del) / .9);   // the points that went out come back while they fly, not all at once
+    bri[i] = b;
+  }
+  geo.attributes.position.needsUpdate = true; geo.attributes.bri.needsUpdate = true;
+  pts.material.uniforms.uSize.value = s === 0 ? 150 : 120;
+  // red: the crash, then the seat
+  const red = clamp((t - 8.44) / .4) * (1 - clamp((t - 9.62) / .6)) + .55 * clamp((t - 13.22) / .3) * (.75 + .25 * Math.sin(t * 9));
+  pts.material.uniforms.uRed.value = red;
+  // camera: ease between state cameras, plus a slow push that never stops
+  const kc = ease(clamp((t - t0) / 1.25)), A = ST[Math.max(0, s - 1)], B = ST[s];
+  const cp = s === 0 ? B.cam : vec(A.cam, B.cam, kc), lk = s === 0 ? B.look : vec(A.look, B.look, kc);
+  const push = (t - t0) * (s === 5 ? .9 : .28), orb = s === 1 ? Math.sin((t - 1.6) * .45) * .12 : s === 0 ? t * .025 : 0;
+  const R = Math.hypot(cp[0], cp[2]) - push, ang = Math.atan2(cp[0], cp[2]) + orb;
+  camera.position.set(Math.sin(ang) * R, cp[1] - (s === 0 ? t * .12 : 0), Math.cos(ang) * R); camera.lookAt(...lk);
+  dust.rotation.y = t * .01;
+  // measurement ticks (one per dimension, staggered with the list)
+  ticks.forEach((l, k) => { const a = clamp((t - 1.85 - k * .12) / .2) * (1 - clamp((t - 5.2) / .3)); l.material.opacity = .75 * a; l.scale.x = eout(clamp((t - 1.85 - k * .12) / .35)); });
+  const early = 1 - clamp((t - 1.62) / .4);
+  tmplMat.opacity = Math.max(.95 * early, .85 * clamp((t - 3.3) / .3) * (1 - clamp((t - 5.2) / .3)));
+  tmpl.forEach(l => { if (t < 2.1) { l.scale.setScalar(.46); l.position.set(0, -.95, -5.5); } else { l.scale.setScalar(1); l.position.set(.4 * Math.sin(t * 2.4) * clamp((t - 3.6) / .5), 0, 0); } });
+  boxMat.opacity = .9 * clamp((t - 13.2) / .5); groundMat.opacity = .25 * clamp((t - 7) / .6) * (1 - clamp((t - 12.6) / .4));
+  renderer.render(scene, camera); renderer.getContext().finish();
+
+  // ---------- overlay ----------
+  const big = $('big'), out = clamp((t - 1.6) / .35), ring = $('ring');
+  if (t < F0 - .1) { big.textContent = '4063'; big.style.opacity = 1 - out; big.style.transform = `translate(-50%,0) scale(${1 + .06 * Math.sin(Math.PI * clamp((t - .32) / .5)) + .15 * out})`; }
+  else if (t < SLAM) { big.textContent = String(Math.min(4063, aliveAt(t))); const kick = 1 - clamp(((t - F0) % FSTEP) / FSTEP);
+    big.style.opacity = clamp((t - F0 + .1) / .1) * (1 - .8 * clamp((t - DARK) / .2)); big.style.transform = `translate(-50%,0) scale(${1 + .12 * kick * (t < DARK ? 1 : 0)})`; }
+  else { big.textContent = '？'; const ks = spring(t - SLAM, 16, .45); big.style.opacity = 1 - clamp((t - 7.0) / .25); big.style.transform = `translate(-50%,0) scale(${2.6 - 1.6 * ks})`; }
+  const kr = clamp((t - SLAM) / .45); ring.style.opacity = kr > 0 && kr < 1 ? (1 - kr) : 0; ring.style.transform = `translate(-50%,-50%) scale(${.3 + 2.2 * eout(kr)})`;
+  const tag = $('tag');
+  if (t < 6.95) { tag.innerHTML = '4063 名飞行员<small>1950 · 美国空军测量</small>'; tag.style.opacity = clamp((t - 1.7) / .3); }
+  else { tag.innerHTML = '1940 年代末<small>美国空军 · 事故调查</small>'; tag.style.opacity = clamp((t - 7.14) / .3); }
+  tag.style.transform = `translateY(${(1 - eout(clamp((t - (t < 6.95 ? 1.7 : 7.14)) / .4))) * 14}px)`;
+  [...$('dims').children].forEach((el, k) => { const a = clamp((t - 1.85 - k * .12) / .2) * (1 - clamp((t - 5.2) / .3)); el.style.opacity = a; el.style.transform = `translateX(${(1 - eout(clamp((t - 1.85 - k * .12) / .3))) * 30}px)`; });
+  const av = $('avg'), ka = spring(t - 3.25, 12, .6); av.style.opacity = clamp((t - 3.25) / .15) * (1 - clamp((t - 5.2) / .3)); av.style.transform = `scale(${.8 + .2 * ka})`;
+  const sc = $('scan'), ks = clamp((t - 9.75) / 1.25); sc.style.opacity = ks > 0 && ks < 1 ? 1 : 0; sc.style.left = `${lerp(330, 1590, ease(ks))}px`;
+  const proj = (x, y) => { const v = new THREE.Vector3(x, y, 0).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
+  [[$('ck1'), 11.08, -4.6, 2.6, '飞行员'], [$('ck2'), 11.94, 1.6, 2.0, '飞机']].forEach(([el, t1, x, y, lab]) => {
+    const k = spring(t - t1, 15, .5), [sx, sy] = proj(x, y); el.style.left = sx + 'px'; el.style.top = sy + 'px';
+    el.style.opacity = clamp((t - t1) / .1) * (1 - clamp((t - 12.9) / .3)); el.style.transform = `translate(-50%,-50%) scale(${.5 + .5 * k})`;
+  });
+  const ckp = $('cockpit'), kk = spring(t - 13.22, 12, .6); ckp.style.opacity = clamp((t - 13.22) / .12); ckp.style.transform = `scale(${.75 + .25 * kk})`;
+  const cur = SUBS.find(([a, b]) => t >= a - .05 && t < b + .04), sub = $('sub');
+  sub.innerHTML = cur ? cur[2] : ''; sub.style.opacity = cur ? clamp((t - cur[0] + .05) / .08) : 0;
+};
+window.ready = false; document.fonts.ready.then(() => { window.render(0); window.ready = true; });
+</script></body></html>

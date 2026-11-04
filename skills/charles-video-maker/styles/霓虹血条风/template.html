@@ -1,0 +1,366 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#050508;overflow:hidden}canvas{display:block}</style>
+</head><body><canvas id="c"></canvas>
+<script>
+// 为什么一句狠话，要五次温柔才能抵消？ —— render(t) only; timeline mirrors audio/timeline.json
+const Q = new URLSearchParams(location.search), COVER = Q.get('cover') === '1';
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const VW = innerWidth, VH = innerHeight; cv.width = VW; cv.height = VH;
+const W = COVER ? 1080 : 1920, H = COVER ? 1440 : 1080;
+const FONT = '"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
+const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji"';
+const C = { bg: '#050508', pink: '#ff5c93', pinkD: '#c2185b', red: '#ff3b4a', orange: '#ffad33', gold: '#ffd166',
+  green: '#5cffb0', white: '#f4f4f7', grey: '#8b8b99', dim: '#2a2a33' };
+const TL = { beat: .6, climax: [12.0, 31.2], bubble: 1.2, damage: 1.8, heals: [5.4, 6.6, 7.8, 9.0, 10.2],
+  weight: 14.4, tokens: [15.6, 16.2, 16.8, 17.4, 18.0], duelStart: 22.8, duelStep: .6,
+  duelL: '-+-+-+-+-'.split(''), duelR: '-+++++-+++++'.split(''), gameover: 28.8, half: 29.4,
+  fight: [[34.2, '-', 'A', '你根本不在乎'], [35.4, '+', 'B', '先别吵了，你吃饭没？'], [36.6, '+', 'A', '我知道你也委屈'],
+          [37.8, '+', 'B', '这事是我没做好'], [39.0, '+', 'A', '🤝 拉住对方的手'], [40.2, '+', 'B', '我们是一边的']],
+  fake: [43.8, 44.4, 45.0, 45.6, 46.2], total: 57.6 };
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ss = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const eo = k => 1 - Math.pow(1 - clamp(k), 3);
+function spring(x, w = 15, z = .72) { if (x <= 0) return 0; const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x)); }
+function rnd(s) { s = Math.sin(s * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+const win = (t, a, b, f = .25) => clamp(Math.min((t - a) / f, (b - t) / f));   // 0..1 visibility in [a,b]
+
+// ---------- pixel font 5x7 ----------
+const PF = { '0': '01110100011001110101110011000101110', '1': '00100011000010000100001000010001110', '2': '01110100010000100010001000100011111',
+  '3': '11111000100010000010000011000101110', '4': '00010001100101010010111110001000010', '5': '11111100001111000001000011000101110',
+  '6': '00110010001000011110100011000101110', '7': '11111000010001000100010000100001000', '8': '01110100011000101110100011000101110',
+  '9': '01110100011000101111000010001001100', ':': '00000011000110000000011000110000000', '+': '00000001000010011111001000010000000',
+  '-': '00000000000000011111000000000000000', '/': '00001000010001000100010001000010000', '.': '00000000000000000000000000110001100',
+  ' ': '00000000000000000000000000000000000', 'G': '01110100011000010111100011000101111', 'A': '01110100011000111111100011000110001',
+  'M': '10001110111010110101100011000110001', 'E': '11111100001000011110100001000011111', 'O': '01110100011000110001100011000101110',
+  'V': '10001100011000110001100010101000100', 'R': '11110100011000111110101001001010001', 'x': '00000100010101000100010101000100000' };
+function pixText(s, x, y, px, col, align = 'left', glow = 0) {
+  const cw = 6 * px, w = s.length * cw - px; let x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  g.save(); g.fillStyle = col; if (glow) { g.shadowColor = col; g.shadowBlur = glow; }
+  for (const ch of s) { const m = PF[ch] || PF[' '];
+    for (let i = 0; i < 35; i++) if (m[i] === '1') g.fillRect(Math.round(x0 + (i % 5) * px), Math.round(y + Math.floor(i / 5) * px), px - 1, px - 1);
+    x0 += cw; }
+  g.restore(); return w;
+}
+// ---------- pixel heart ----------
+const PH = ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'];
+function pixHeart(x, y, px, fill, col, a = 1) {      // fill 0..1 (left to right), empty = dark outline
+  g.save(); g.globalAlpha *= a;
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 7; c++) if (PH[r][c] === '1') {
+    g.fillStyle = (c + .5) / 7 <= fill ? col : '#3a1c26'; g.fillRect(x + c * px, y + r * px, px - 1, px - 1); }
+  if (fill > 0) { g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x + px, y + px, px - 1, px - 1); }
+  g.restore();
+}
+function hpBar(x, y, px, hp, col, a = 1, label = '感情值', align = 'left') {   // 10 hearts, hp 0..100
+  const step = 8 * px, w = 10 * step; const x0 = align === 'center' ? x - w / 2 : x;
+  if (label) txt(label, x0, y - 14, 26, C.grey, 'left', 500, a);
+  for (let i = 0; i < 10; i++) pixHeart(x0 + i * step, y, px, clamp((hp - i * 10) / 10), col, a);
+}
+// ---------- rich text: [red] {gold} <green> ----------
+function segs(s) { const out = []; let cur = '', col = C.white; const map = { '[': C.red, '{': C.gold, '<': C.green };
+  for (const ch of s) { if (map[ch]) { if (cur) out.push([cur, col]); cur = ''; col = map[ch]; }
+    else if (']}>'.includes(ch)) { if (cur) out.push([cur, col]); cur = ''; col = C.white; } else cur += ch; }
+  if (cur) out.push([cur, col]); return out; }
+function txt(s, x, y, size, col = C.white, align = 'center', weight = 800, a = 1, glow = 0) {
+  g.save(); g.globalAlpha *= a; g.font = `${weight} ${size}px ${FONT},${EMOJI}`; g.textBaseline = 'middle';
+  const sg = segs(s); const w = sg.reduce((p, [t]) => p + g.measureText(t).width, 0);
+  let x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  for (const [t, c] of sg) { const cc = c === C.white ? col : c; g.fillStyle = cc;
+    if (glow || c !== C.white) { g.shadowColor = cc; g.shadowBlur = glow || (c !== C.white ? 18 : 0); }
+    g.fillText(t, x0, y); x0 += g.measureText(t).width; g.shadowBlur = 0; }
+  g.restore(); return w;
+}
+// popped caption at bottom: scale-in, hold, fade
+function caption(t, s, a, b, y = 950, size = 58) {
+  const v = win(t, a, b, .2); if (v <= 0) return; const k = .85 + .15 * spring(t - a, 22, .7);
+  g.save(); g.translate(W / 2, y); g.scale(k, k); txt(s, 0, 0, size, C.white, 'center', 800, v); g.restore();
+}
+// ---------- big glossy heart ----------
+function heartPath(cx, cy, s) {   // s = half width
+  g.beginPath(); g.moveTo(cx, cy + s * .95);
+  g.bezierCurveTo(cx - s * 1.25, cy + s * .1, cx - s * 1.05, cy - s * .95, cx - s * .5, cy - s * .9);
+  g.bezierCurveTo(cx - s * .2, cy - s * .88, cx - s * .05, cy - s * .7, cx, cy - s * .5);
+  g.bezierCurveTo(cx + s * .05, cy - s * .7, cx + s * .2, cy - s * .88, cx + s * .5, cy - s * .9);
+  g.bezierCurveTo(cx + s * 1.05, cy - s * .95, cx + s * 1.25, cy + s * .1, cx, cy + s * .95); g.closePath();
+}
+function bigHeart(cx, cy, s, level, t, o = {}) {
+  const col = o.grey ? '#77777f' : C.pink, a = o.a ?? 1; g.save(); g.globalAlpha *= a;
+  // glow
+  heartPath(cx, cy, s); g.shadowColor = o.grey ? 'rgba(160,160,170,.3)' : `rgba(255,70,130,${.45 + .25 * (o.glow || 0)})`;
+  g.shadowBlur = s * (.35 + .4 * (o.glow || 0)); g.fillStyle = '#1a0710'; g.fill(); g.shadowBlur = 0;
+  // liquid
+  g.save(); heartPath(cx, cy, s); g.clip();
+  const top = cy + s * .95 - (s * 1.9) * clamp(level);
+  const gr = g.createLinearGradient(0, cy - s, 0, cy + s); gr.addColorStop(0, o.grey ? '#a0a0aa' : '#ff8db5'); gr.addColorStop(1, o.grey ? '#55555e' : C.pinkD);
+  g.fillStyle = gr; g.beginPath(); g.moveTo(cx - s * 1.3, cy + s * 1.2);
+  for (let i = 0; i <= 40; i++) { const x = cx - s * 1.3 + i * s * 2.6 / 40; g.lineTo(x, top + Math.sin(i * .5 + t * 4) * s * .025 * (level < .98 ? 1 : 0)); }
+  g.lineTo(cx + s * 1.3, cy + s * 1.2); g.closePath(); g.fill();
+  if (level < .98 && level > .02) { g.strokeStyle = 'rgba(255,220,235,.7)'; g.lineWidth = s * .02; g.beginPath();
+    for (let i = 0; i <= 40; i++) { const x = cx - s * 1.3 + i * s * 2.6 / 40; const y = top + Math.sin(i * .5 + t * 4) * s * .025; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  // gloss
+  const hg = g.createRadialGradient(cx - s * .45, cy - s * .45, 0, cx - s * .45, cy - s * .45, s * .55);
+  hg.addColorStop(0, 'rgba(255,255,255,.55)'); hg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = hg; g.fillRect(cx - s * 1.3, cy - s * 1.2, s * 2.6, s * 2.4);
+  // crack
+  if (o.crack > 0) { g.strokeStyle = `rgba(20,0,8,${o.crack})`; g.lineWidth = s * .035; g.lineJoin = 'miter'; g.beginPath();
+    let x = cx + s * .05, y = cy - s * .5; g.moveTo(x, y);
+    for (let i = 1; i <= 6; i++) { x = cx + (i % 2 ? -1 : 1) * s * (.08 + rnd(i) * .1); y = cy - s * .5 + i * s * .22; g.lineTo(x, y); } g.stroke(); }
+  g.restore();
+  heartPath(cx, cy, s); g.strokeStyle = o.grey ? 'rgba(200,200,210,.5)' : 'rgba(255,190,215,.85)'; g.lineWidth = s * .025; g.stroke();
+  g.restore();
+}
+// HUD item card
+function card(x, y, w, icon, name, val, col, a, k = 1) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; g.translate(x, y); g.scale(k, k);
+  g.fillStyle = 'rgba(20,20,28,.92)'; g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 2;
+  g.beginPath(); g.roundRect(0, -48, w, 96, 12); g.fill(); g.stroke();
+  txt(icon, 46, 0, 48, C.white, 'center', 400); txt(name, 92, -17, 36, C.white, 'left', 700); txt(val, 92, 23, 28, col, 'left', 700);
+  g.restore();
+}
+function bubble(x, y, s, col, a, k, tail = 'left', size = 44) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; g.translate(x, y); g.scale(k, k);
+  g.font = `800 ${size}px ${FONT},${EMOJI}`; const w = g.measureText(s).width + 64, h = size + 44;
+  const x0 = tail === 'left' ? 0 : tail === 'right' ? -w : -w / 2;
+  g.fillStyle = 'rgba(16,16,22,.95)'; g.strokeStyle = col; g.lineWidth = 3; g.shadowColor = col; g.shadowBlur = 20;
+  g.beginPath(); g.roundRect(x0, -h / 2, w, h, 18); g.fill(); g.stroke(); g.shadowBlur = 0;
+  txt(s, x0 + w / 2, 0, size, C.white, 'center', 800); g.restore();
+}
+function particles(cx, cy, t0, t, n, col, spd = 520, seed = 1, size = 10) {
+  const d = t - t0; if (d < 0 || d > 1.2) return; g.save(); g.fillStyle = col; g.globalAlpha *= clamp(1 - d / 1.2);
+  for (let i = 0; i < n; i++) { const an = rnd(seed + i) * Math.PI * 2, v = spd * (.4 + rnd(seed * 7 + i) * .8);
+    const x = cx + Math.cos(an) * v * d, y = cy + Math.sin(an) * v * d + 600 * d * d; g.fillRect(x, y, size, size); }
+  g.restore();
+}
+function floatNum(s, x, y, t0, t, col, px = 9) { const d = t - t0; if (d < 0 || d > 1.1) return;
+  g.save(); g.globalAlpha = clamp(1.4 - d * 1.3); pixText(s, x, y - 120 * eo(d / 1.1), px, col, 'center', 16); g.restore(); }
+function titleBar(a = 1) {
+  g.save(); g.globalAlpha *= a; g.fillStyle = 'rgba(255,255,255,.04)'; g.fillRect(0, 0, W, 112);
+  g.fillStyle = C.pink; g.fillRect(72, 34, 8, 44);
+  txt('为什么一句[狠话]，要{五次温柔}才能抵消？', 102, 57, 46, C.white, 'left', 800); g.restore();
+}
+function sourceTag(s, a) { txt(s, W - 60, H - 40, 22, '#6e6e7c', 'right', 500, a); }
+
+// ---------- HP model for opening ----------
+function hpOpen(t) { let hp = 100 - 50 * spring(t - TL.damage, 18, .8);
+  TL.heals.forEach(h => hp += 10 * spring(t - h, 16, .75)); return hp; }
+
+// ---------- scenes ----------
+function sOpen(t) {
+  const hp = hpOpen(t), sh = t > TL.damage && t < TL.damage + .5 ? (1 - (t - TL.damage) / .5) * 26 : 0;
+  g.save(); g.translate(sh * (rnd(Math.floor(t * 30)) - .5), sh * (rnd(Math.floor(t * 30) + 9) - .5));
+  const cx = 740, cy = 500, push = 1 + .04 * ss(0, 12, t);
+  g.translate(cx, cy); g.scale(push, push); g.translate(-cx, -cy);
+  const crack = clamp(1 - (hp - 50) / 45) * (t > TL.damage ? 1 : 0);
+  const glow = TL.heals.reduce((p, h) => p + clamp(1 - Math.abs(t - h - .15) / .3), 0);
+  bigHeart(cx, cy, 255 * (1 + .06 * Math.max(0, 1 - Math.abs(t - TL.damage) / .15)), hp / 100, t, { crack: crack * .9, glow });
+  const low = hp < 75 && t < TL.heals[1] ? (Math.floor(t * 4) % 2 ? .45 : 1) : 1;
+  hpBar(cx - 300, 820, 7, hp, hp < 75 ? C.red : C.pink, low);
+  pixText(String(Math.round(hp)).padStart(3, ' ') + '/100', cx + 300, 765, 5, C.white, 'right');
+  particles(cx + 120, 845, TL.damage, t, 26, C.pink, 560, 3, 9);
+  floatNum('-50', cx + 260, cy - 120, TL.damage, t, C.red, 14);
+  TL.heals.forEach((h, i) => { floatNum('+10', cx + 230, cy - 60, h, t, C.green, 10); particles(cx - 300 + (5 + i) * 56 + 24, 845, h, t, 10, C.green, 260, 20 + i, 7); });
+  // counter
+  const n = TL.heals.filter(h => t >= h).length;
+  if (n) { const k = 1 + .25 * (1 - spring(t - TL.heals[n - 1], 20, .5)); g.save(); g.translate(cx - 420, cy - 40); g.scale(k, k);
+    txt('温柔', 0, -70, 30, C.grey, 'center', 600); pixText(`${n}/5`, 0, -20, 14, n === 5 ? C.gold : C.green, 'center', 22); g.restore(); }
+  g.restore();
+  // bubble
+  const ba = win(t, TL.bubble, 3.4, .2); bubble(1180, 330, '你每次都这样。', C.red, ba, .7 + .3 * spring(t - TL.bubble, 20, .5), 'left', 52);
+  // heal cards
+  const items = [['🥛', '递来一杯温水'], ['🌿', '记得你不吃香菜'], ['☂️', '下雨天来接你'], ['🌙', '睡前说一句晚安'], ['🫂', '一个拥抱']];
+  items.forEach(([ic, nm], i) => { const h = TL.heals[i]; if (t < h) return;
+    const x = lerp(1960, 1220, spring(t - h, 15, .75)); card(x, 250 + i * 110, 600, ic, nm, '生命恢复 +10', C.green, win(t, h, 12.0, .2)); });
+  caption(t, '一句话，血掉了[一半]', 2.3, 4.8);
+  caption(t, '补回来，要几次<温柔>？', 5.3, 9.9);
+  caption(t, '整整{五次}', 10.0, 12.0, 950, 72);
+  if (t > TL.damage && t < TL.damage + .12) { g.fillStyle = 'rgba(255,40,60,.22)'; g.fillRect(0, 0, W, H); }
+}
+function sClimax1(t) {
+  const d = t - 12.0, k = 1 + .7 * (1 - spring(d, 10, .9));
+  g.save(); g.translate(W / 2, 470); g.scale(k, k);
+  const rg = g.createRadialGradient(0, 0, 0, 0, 0, 520); rg.addColorStop(0, `rgba(255,209,102,${.28 * (1 - ss(0, 2.4, d) * .5)})`); rg.addColorStop(1, 'rgba(255,209,102,0)');
+  g.fillStyle = rg; g.fillRect(-700, -500, 1400, 1000);
+  txt('1', -200, 0, 300, C.red, 'center', 900, 1, 40); txt(':', 0, -10, 240, C.white, 'center', 900); txt('5', 200, 0, 300, C.gold, 'center', 900, 1, 50);
+  g.restore();
+  // shockwave
+  if (d < .8) { g.save(); g.strokeStyle = `rgba(255,209,102,${.8 * (1 - d / .8)})`; g.lineWidth = 6; g.beginPath(); g.arc(W / 2, 470, 120 + 900 * eo(d / .8), 0, Math.PI * 2); g.stroke(); g.restore(); }
+  particles(W / 2, 470, 12.0, t, 40, C.gold, 900, 50, 8);
+  txt('伤害', W / 2 - 200, 690, 34, C.grey, 'center', 600, ss(12.2, 12.5, t)); txt('温柔', W / 2 + 200, 690, 34, C.grey, 'center', 600, ss(12.2, 12.5, t));
+  caption(t, '一次伤害，要{五次}才补得回', 12.3, 13.3);
+  caption(t, '为什么不是 [1 : 1]？', 13.3, 14.4, 950, 64);
+}
+function sScale(t) {
+  const px = 960, py = 380, L = 420;
+  const tilt = 16 * spring(t - TL.weight, 12, .6) - TL.tokens.reduce((p, h) => p + (16 / 5) * spring(t - h, 13, .7), 0);
+  const an = tilt * Math.PI / 180, cam = 1 + .05 * ss(14.4, 21.6, t);
+  g.save(); g.translate(W / 2, 560); g.scale(cam, cam); g.translate(-W / 2, -560);
+  // stand
+  g.strokeStyle = '#d9d9e3'; g.lineWidth = 10; g.beginPath(); g.moveTo(px, py); g.lineTo(px, 860); g.stroke();
+  g.lineWidth = 12; g.beginPath(); g.moveTo(px - 160, 860); g.lineTo(px + 160, 860); g.stroke();
+  const ends = [-1, 1].map(s => [px + s * L * Math.cos(an), py + s * L * Math.sin(an) * -1 * -1 * (s === -1 ? 1 : 1)]);
+  const lx = px - L * Math.cos(an), ly = py + L * Math.sin(an), rx = px + L * Math.cos(an), ry = py - L * Math.sin(an);
+  g.save(); g.shadowColor = C.gold; g.shadowBlur = 12 * (1 - Math.min(1, Math.abs(tilt) / 4)); g.strokeStyle = '#ececf3'; g.lineWidth = 12;
+  g.beginPath(); g.moveTo(lx, ly); g.lineTo(rx, ry); g.stroke(); g.restore();
+  g.fillStyle = C.gold; g.beginPath(); g.arc(px, py, 16, 0, Math.PI * 2); g.fill();
+  const pan = (x, y, col) => { g.strokeStyle = 'rgba(236,236,243,.7)'; g.lineWidth = 3; g.beginPath(); g.moveTo(x, y); g.lineTo(x - 130, y + 170); g.moveTo(x, y); g.lineTo(x + 130, y + 170); g.stroke();
+    g.strokeStyle = col; g.lineWidth = 8; g.beginPath(); g.ellipse(x, y + 172, 150, 22, 0, 0, Math.PI); g.stroke(); return [x, y + 172]; };
+  const [lpx, lpy] = pan(lx, ly, C.red), [rpx, rpy] = pan(rx, ry, C.pink);
+  // weight (falls in)
+  const wy = t < TL.weight ? lerp(-200, lpy - 70, (clamp((t - (TL.weight - .5)) / .5)) ** 2) : lpy - 70;
+  if (t > TL.weight - .5) { g.save(); g.fillStyle = '#5a0f1a'; g.strokeStyle = C.red; g.lineWidth = 4; g.shadowColor = C.red; g.shadowBlur = 24;
+    g.beginPath(); g.roundRect(lpx - 120, wy - 60, 240, 130, 14); g.fill(); g.stroke(); g.shadowBlur = 0;
+    txt('一句狠话', lpx, wy + 5, 42, C.white, 'center', 800); g.restore(); }
+  // tokens
+  TL.tokens.forEach((h, i) => { if (t < h - .4) return; const row = i < 3 ? 0 : 1, col = i < 3 ? i : i - 3;
+    const tx = rpx - 100 + col * 100 + (row ? 50 : 0), ty0 = rpy - 50 - row * 80;
+    const ty = t < h ? lerp(-150, ty0, ((t - (h - .4)) / .4) ** 2) : ty0;
+    bigHeart(tx, ty, 38, 1, t, { glow: clamp(1 - (t - h) / .4) }); txt('温柔', tx, ty + 4, 20, C.white, 'center', 800); });
+  floatNum('5/5', rpx, rpy - 260, TL.tokens[4], t, C.gold, 10);
+  g.restore();
+  if (t > 18.0) { const k = spring(t - 18.0, 18, .5); g.save(); g.translate(px, 250); g.scale(k, k); txt('扳平', 0, 0, 56, C.gold, 'center', 900, win(t, 18.0, 21.6), 28); g.restore(); }
+  caption(t, '心理学叫它：[负面偏差]', 14.6, 16.1);
+  caption(t, '大脑把坏事，记得更[重]', 16.1, 18.6);
+  const v = win(t, 18.7, 21.6, .2);
+  if (v > 0) { txt('漏掉一次危险，可能[没命]', W / 2, 920, 52, C.white, 'center', 800, v); txt('漏掉一次好事，只是可惜', W / 2, 990, 40, C.grey, 'center', 600, ss(19.4, 19.7, t) * v); }
+  sourceTag('Baumeister 等 2001，《Bad Is Stronger Than Good》', win(t, 14.6, 21.6));
+}
+function duelState(seq, t, hp0, hit, heal) {   // returns hp, goodCount, badCount, history[]
+  let hp = hp0, gd = 0, bd = 0; const hist = [hp0];
+  seq.forEach((s, k) => { const te = TL.duelStart + k * TL.duelStep; const sp = spring(t - te, 20, .8);
+    if (t >= te) { s === '+' ? gd++ : bd++; } const target = clamp((hist[hist.length - 1]) + (s === '+' ? heal : -hit), 0, 100);
+    hp = hp + (target - hist[hist.length - 1]) * sp; hist.push(target); });
+  return { hp, gd, bd, hist };
+}
+function panel(x, y, w, h, label, lcol, st, t, seq, side, over) {
+  g.save(); g.fillStyle = 'rgba(255,255,255,.035)'; g.strokeStyle = 'rgba(255,255,255,.14)'; g.lineWidth = 2;
+  g.beginPath(); g.roundRect(x, y, w, h, 20); g.fill(); g.stroke();
+  txt(label, x + 40, y + 50, 40, lcol, 'left', 800);
+  const grey = over > 0;
+  bigHeart(x + 170, y + 230, 105, st.hp / 100, t, { grey, crack: grey ? .9 : 0 });
+  txt('好 : 坏', x + 520, y + 140, 30, C.grey, 'center', 600);
+  pixText(`${st.gd}:${st.bd}`, x + 520, y + 175, 15, side === 'L' ? C.red : C.green, 'center', 18);
+  hpBar(x + 330, y + 390, 5, st.hp, grey ? '#666' : C.pink, 1, '', 'left');
+  // history chart
+  const cx0 = x + 40, cy0 = y + h - 40, cw = w - 80, ch = 150; g.strokeStyle = 'rgba(255,255,255,.3)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(cx0, cy0 - ch - 10); g.lineTo(cx0, cy0); g.lineTo(cx0 + cw, cy0); g.stroke();
+  txt('时间', cx0 + cw, cy0 + 22, 20, C.grey, 'right', 500);
+  const n = seq.length, shown = st.gd + st.bd; g.strokeStyle = side === 'L' ? C.red : C.green; g.lineWidth = 5; g.shadowColor = g.strokeStyle; g.shadowBlur = 14;
+  g.beginPath(); for (let i = 0; i <= shown; i++) { const px_ = cx0 + i * cw / 12, py_ = cy0 - st.hist[i] / 100 * ch; i ? g.lineTo(px_, py_) : g.moveTo(px_, py_); }
+  if (shown < n) { const fr = clamp((t - (TL.duelStart + (shown - 1) * TL.duelStep)) / TL.duelStep); }
+  g.stroke(); g.shadowBlur = 0;
+  seq.forEach((s, k) => { const te = TL.duelStart + k * TL.duelStep; floatNum(s === '+' ? '+' : '-', x + 300, y + 170, te, t, s === '+' ? C.green : C.red, 10); });
+  g.restore();
+}
+function sDuel(t) {
+  caption(t, 'Gottman 实验室：专门看伴侣[怎么吵架]', 21.7, 23.6, 950, 52);
+  const L = duelState(TL.duelL, t, 70, 14, 6), R = duelState(TL.duelR, t, 70, 12, 5);
+  if (t > 28.2) L.hp = L.hp * (1 - ss(28.2, TL.gameover, t));
+  const over = ss(TL.gameover, TL.gameover + .2, t);
+  const a = ss(21.6, 22.0, t);
+  g.save(); g.globalAlpha = a;
+  panel(80, 150, 860, 680, '后来分开的', '#ff8a8a', L, t, TL.duelL, 'L', over);
+  panel(980, 150, 860, 680, '一直走下去的', C.green, R, t, TL.duelR, 'R', 0);
+  if (t > 28.0) { txt('= 0.8 : 1', 80 + 520, 150 + 330, 40, '#ff8a8a', 'center', 800, ss(28.0, 28.3, t)); txt('= 5 : 1', 980 + 520, 150 + 330, 44, C.gold, 'center', 900, ss(29.4, 29.7, t), 20); }
+  if (over > 0) { const k = 1 + .5 * (1 - spring(t - TL.gameover, 14, .6)); g.save(); g.translate(510, 690); g.scale(k, k);
+    g.fillStyle = `rgba(5,5,8,${.7 * over})`; g.fillRect(-420, -70, 840, 150); pixText('GAME OVER', 0, -42, 12, C.red, 'center', 30); g.restore(); }
+  g.restore();
+  const v = win(t, TL.half, 31.2, .2);
+  if (v > 0) { g.save(); g.fillStyle = `rgba(5,5,8,${.75 * v})`; g.fillRect(0, 880, W, 140); g.restore(); txt('你以为，走下去的那一对，是吵完再补——', W / 2, 950, 54, C.white, 'center', 800, v); }
+}
+function sClimax2(t) {
+  const d = t - 31.2, k = 1 + .6 * (1 - spring(d, 10, .9));
+  g.save(); g.translate(W / 2, 450); g.scale(k, k);
+  const rg = g.createRadialGradient(0, 40, 0, 0, 40, 600); rg.addColorStop(0, 'rgba(92,255,176,.22)'); rg.addColorStop(1, 'rgba(92,255,176,0)');
+  g.fillStyle = rg; g.fillRect(-800, -500, 1600, 1000);
+  txt('吵着架，也在', 40, -10, 110, C.white, 'right', 900);
+  txt('回血', 70, -10, 190, C.green, 'left', 900, 1, 50);
+  g.restore();
+  particles(W / 2 + 260, 450, 31.2, t, 40, C.green, 800, 77, 9);
+  hpBar(W / 2, 640, 9, 100, (Math.floor(t * 6) % 2 && d < 1.2) ? C.green : C.pink, ss(31.4, 31.7, t), '', 'center');
+  caption(t, '5 : 1，量的是[吵架的时候]', 32.2, 33.6, 900, 54);
+  sourceTag('Gottman Institute，《The Magic Relationship Ratio, According to Science》', win(t, 32.2, 33.6));
+}
+function sFight(t) {
+  const hits = TL.fight.map(([te, s, who]) => ({ te, s, who }));
+  const hpOf = who => { let hp = 85; hits.forEach(({ te, s, who: w }) => { const target = s === '-' ? (w === 'A' ? who === 'B' : who === 'A') : (w !== who);
+      if (target) hp += (s === '-' ? -25 : 6) * spring(t - te, 18, .8); }); return clamp(hp, 0, 100); };
+  [['A', 330], ['B', 1590]].forEach(([who, x]) => { const hp = hpOf(who);
+    const fl = hits.find(({ te, s, who: w }) => t >= te && t < te + .3 && ((s === '-' && w !== who) || (s === '+' && w !== who)));
+    bigHeart(x, 470, 150, hp / 100, t, { glow: fl && fl.s === '+' ? 1 : 0, crack: hp < 70 ? .6 : 0 });
+    hpBar(x, 680, 5, hp, C.pink, 1, '', 'center');
+    hits.forEach(({ te, s, who: w }) => { if (w !== who) floatNum(s === '-' ? '-25' : '+6', x + 130, 360, te, t, s === '-' ? C.red : C.green, 8); });
+  });
+  // chat column
+  const shownMsgs = TL.fight.filter(([te]) => t >= te);
+  shownMsgs.forEach(([te, s, who, msg], i) => { const age = shownMsgs.length - 1 - i;
+    const y = 780 - age * 104 - 70 * (1 - spring(t - te, 16, .75)) * (age === 0 ? -1 : 0);
+    const a = (age === 0 ? clamp((t - te) / .15) : 1) * (1 - .18 * age);
+    bubble(who === 'A' ? 620 : 1300, y - 60, msg, s === '-' ? C.red : C.green, a, age === 0 ? .8 + .2 * spring(t - te, 20, .55) : 1, who === 'A' ? 'left' : 'right', 44); });
+  caption(t, '这次吵架，还没吵完', 33.8, 35.3, 950, 48);
+  caption(t, '吵架没停，血一直在{回}', 41.0, 43.2, 950, 60);
+}
+function sFake(t) {
+  caption(t, '但，别急着[凑数]', 43.3, 45.2, 900, 60);
+  TL.fake.forEach((h, i) => { if (t < h) return; const x = 360 + i * 300, k = .7 + .3 * spring(t - h, 16, .6);
+    g.save(); g.translate(x, 470); g.scale(k, k); bigHeart(0, 0, 90, .0, t, { grey: true }); g.restore();
+    txt('敷衍的拥抱', x, 610, 28, C.grey, 'center', 700, clamp((t - h) / .2)); floatNum('+0', x, 350, h, t, C.grey, 9); });
+  caption(t, '敷衍的五次，等于[零]', 45.3, 47.4, 900, 64);
+  sourceTag('Psychology Today，2025-01', win(t, 45.3, 47.4));
+}
+function sRedefine(t) {
+  const k = ss(47.4, 48.4, t), gap = lerp(300, 150, ss(47.4, 52.8, t));
+  bigHeart(W / 2 - gap, 400, 130, 1, t, { glow: .6 * k + .3 * Math.sin(t * 3) }); bigHeart(W / 2 + gap, 400, 130, 1, t, { glow: .6 * k + .3 * Math.sin(t * 3 + 1) });
+  if (gap < 220) { g.save(); g.strokeStyle = `rgba(255,209,102,${.6 * ss(49, 51, t)})`; g.lineWidth = 4; g.setLineDash([10, 14]); g.lineDashOffset = -t * 40;
+    g.beginPath(); g.moveTo(W / 2 - gap + 140, 400); g.lineTo(W / 2 + gap - 140, 400); g.stroke(); g.restore(); }
+  caption(t, '{回血}，不是事后补偿', 47.5, 49.2, 760, 72);
+  const a2 = win(t, 49.2, 52.8, .2);
+  if (a2 > 0) { txt('是吵得最凶的时候，', W / 2, 730, 62, C.white, 'center', 800, a2);
+    txt('你还记得，对面是[自己人]', W / 2, 830, 72, C.white, 'center', 900, ss(50.3, 50.6, t) * a2); }
+}
+function sEnd(t) {
+  const k = .9 + .1 * spring(t - 52.8, 12, .8);
+  bigHeart(W / 2 - 90, 330, 70, 1, t, { glow: .5 + .5 * Math.sin(t * 4) }); bigHeart(W / 2 + 90, 330, 70, 1, t, { glow: .5 + .5 * Math.sin(t * 4 + 1) });
+  g.save(); g.translate(W / 2, 600); g.scale(k, k);
+  txt('你们吵架时，', 0, -60, 92, C.white, 'center', 900); txt('谁先{回的血}？', 0, 70, 110, C.white, 'center', 900); g.restore();
+  txt('评论区说说', W / 2, 860, 40, C.grey, 'center', 600, ss(53.6, 54.0, t));
+}
+const SCENES = [[0, 12.0, sOpen], [12.0, 14.4, sClimax1], [14.4, 21.6, sScale], [21.6, 31.2, sDuel], [31.2, 33.6, sClimax2],
+  [33.6, 43.2, sFight], [43.2, 47.4, sFake], [47.4, 52.8, sRedefine], [52.8, 57.6, sEnd]];
+const HARD = new Set([0, 12.0, 31.2]);
+
+function frame(t) {
+  g.save(); g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  SCENES.forEach(([a, b, f]) => { const fi = HARD.has(a) ? 1 : clamp((t - a) / .3), fo = HARD.has(b) ? 1 : clamp((b - t) / .3);
+    if (t >= a - .01 && t < b + (HARD.has(b) ? 0 : .3)) { const al = Math.min(fi, t < b ? 1 : fo); if (al > 0) { g.save(); g.globalAlpha = al; f(t); g.restore(); } } });
+  titleBar(1);
+  // dim before climaxes
+  TL.climax.forEach(c => { if (t > c - .75 && t < c) { g.fillStyle = `rgba(0,0,0,${.72 * ss(c - .75, c - .1, t)})`; g.fillRect(0, 0, W, H); } });
+  // vignette + grain
+  const vg = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,.025)'; const fs = Math.floor(t * 24);
+  for (let i = 0; i < 260; i++) g.fillRect(rnd(fs * 1000 + i) * W, rnd(fs * 2000 + i) * H, 2, 2);
+  g.restore();
+}
+function coverFrame() {   // 3:4, 1080x1440
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  txt('为什么一句[狠话]', W / 2, 230, 104, C.white, 'center', 900);
+  txt('要{五次温柔}才能抵消？', W / 2, 370, 92, C.white, 'center', 900);
+  bigHeart(W / 2, 800, 260, .5, 1.0, { crack: .9 });
+  pixText('-50', W / 2 + 300, 600, 16, C.red, 'center', 24);
+  hpBar(W / 2, 1150, 8, 50, C.red, 1, '', 'center');
+  ['+10', '+10', '+10', '+10', '+10'].forEach((s, i) => pixText(s, 150 + i * 195, 1270, 8, C.green, 'center', 14));
+  const vg = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .9); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+}
+window.ready = false;
+window.render = function (t) {
+  for (const c of TL.climax) if (t >= c - .1 && t < c) t = c - .1;        // freeze last 3 frames before a climax
+  g.setTransform(VW / W, 0, 0, VH / H, 0, 0);
+  if (COVER) coverFrame(); else frame(t);
+};
+document.fonts.ready.then(() => { window.render(0); window.ready = true; });
+</script></body></html>

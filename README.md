@@ -93,9 +93,13 @@ D-1 题材雷达 ──► D1 蒸馏风格 ──► D2 资料与文案 ──�
 | **文案** | `gemini_copy.py` 交给本地 Gemini 写旁白和标题，skill 只校验事实和结构 |
 | **静止检查** | `still_check.py` 找出画面停住超过 2 秒的段落，以及字幕换了画面没跟上的地方 |
 | **发布与数据** | `douyin_publish.py` 定时发布，`douyin_stats.py` 拉 2 秒跳出、5 秒完播、点赞、收藏、分享，`douyin_comments.py` 存评论 |
-| **系列化** | `douyin-series.md` 把单条做成同一个世界、同一个主角的系列 |
+| **念稿核对** | `say_check.py` 对比稿子和转写，找出 TTS 吞掉或念岔的数字和字 |
+| **开头混音** | `mix.py --open-boost --open-lift` 让开头 3 秒比正文响约 3 dB，配乐给第一句让路 |
+| **风格库与模板** | `styles/` 五套蒸馏过的画风，`templates/horizontal-explainer/` 横版骨架，`templates/douyin-cover/` 3:4 和 4:3 封面 |
+| **多条并行** | `douyin-batch.md` 一条一个子 agent，主 agent 分活、验收、串行排发布 |
+| **系列化** | `douyin-series.md` 记录系列做法和单条发的现行规矩 |
 
-你需要自己准备两样东西：一个工作目录，默认 `~/Desktop/video/vibe-video/`，放原片库、风格库和工程；一份自己维护的运营手册，记选题规律和数据结论。没有手册也能出片，只是跳过读手册和数据写回这两步。
+你需要自己准备两样东西：一个工作目录，放原片库、风格库和工程，用环境变量 `DOUYIN_WORKDIR` 指定，默认 `~/Desktop/video/vibe-video/`；一份自己维护的运营手册，记选题规律和数据结论，路径写进 `DOUYIN_HANDBOOK`。没有手册也能出片，只是跳过读手册和数据写回这两步。抖音登录态放在 `DOUYIN_PROFILE`、`DOUYIN_COOKIES` 指的位置，默认在 `~/.config/douyin/` 下，只存在本机。
 
 ## 更多效果
 
@@ -154,9 +158,10 @@ skills/charles-video-maker/
   SKILL.md        分流（视频 / 插图 / 机器讲概念 / 抖音）+ 开工四选 + 视频流程
   references/     方案、brief、制作规则、封面与开头、配音、事实核查、机器讲概念、素材层、风格库、抖音模式
   scripts/        渲染、事实核查、自检拼图、音频工具、抖音雷达 / 发布 / 数据 / 评论、Gemini 文案、静止检查
-  scripts/voice/  配音、对齐、时间轴与字幕、混音、真乐器配乐
+  scripts/voice/  配音、对齐、念稿核对、时间轴与字幕、混音、真乐器配乐
   scripts/footage/实录、原片、空镜、生成补位、合成
-  templates/      竖版讲解模板
+  templates/      竖版、横版讲解模板，抖音封面模板
+  styles/         抖音知识号风格库（五套）
   bridge/         虚拟时钟、视频叠加层、页面包装脚本
   anatomy/        Anatomy 原样收录
 examples/         README 用的效果图

@@ -1,0 +1,9 @@
+{
+ "scenes": [
+  ["hook", "只要屋里坐满", {"n23": "23 个人", "half": "超过了一半"}],
+  ["pairs", "因为这道题", {"link": "两两配对"}],
+  ["climax", "253 对里", {"again": "根本不是巧合"}],
+  ["end", "你身边", {"ask": "同一天生日的人吗"}]
+ ],
+ "kind": {"hook.half": "stamp", "climax.again": "stamp"}
+}

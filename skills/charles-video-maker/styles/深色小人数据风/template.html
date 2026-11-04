@@ -1,0 +1,287 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#111113;overflow:hidden}canvas{display:block}</style>
+<script src="timeline.js"></script>
+</head><body><canvas id="c"></canvas>
+<script>
+// 为什么你学得越认真，考得反而越差？ —— render(t) only; cue times from timeline.js (voice-aligned)
+const Q = new URLSearchParams(location.search), COVER = Q.get('cover') === '1';
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const VW = innerWidth, VH = innerHeight; cv.width = VW; cv.height = VH;
+const W = COVER ? 1080 : 1920, H = COVER ? 1440 : 1080;
+const FONT = '"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
+const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji"';
+const C = { bg: '#111113', red: '#ff4a3d', gold: '#ffc94a', white: '#f2f2f5', grey: '#8d8d98', fig: '#e8e8ee', figS: '#a9a9b4' };
+const SC = {}; TL.scenes.forEach((s, i) => { SC[s.name] = Object.assign({ start: s.start, end: (TL.scenes[i + 1] || { start: TL.total }).start }, s.cues); });
+const CLIMAX = [SC.cross.start, SC.eye.start];
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ss = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const eo = k => 1 - Math.pow(1 - clamp(k), 3);
+function spring(x, w = 15, z = .72) { if (x <= 0) return 0; const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x)); }
+function rnd(s) { s = Math.sin(s * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+const win = (t, a, b, f = .25) => clamp(Math.min((t - a) / f, (b - t) / f));
+
+// ---------- rich text: [red] {gold} ----------
+function segs(s) { const out = []; let cur = '', col = null; const map = { '[': C.red, '{': C.gold };
+  for (const ch of s) { if (map[ch]) { if (cur) out.push([cur, col]); cur = ''; col = map[ch]; }
+    else if (']}'.includes(ch)) { if (cur) out.push([cur, col]); cur = ''; col = null; } else cur += ch; }
+  if (cur) out.push([cur, col]); return out; }
+function txt(s, x, y, size, col = C.white, align = 'center', weight = 800, a = 1, glow = 0) {
+  if (a <= 0) return 0; g.save(); g.globalAlpha *= a; g.font = `${weight} ${size}px ${FONT},${EMOJI}`; g.textBaseline = 'middle';
+  const sg = segs(s); const w = sg.reduce((p, [t]) => p + g.measureText(t).width, 0);
+  let x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  for (const [t, c] of sg) { const cc = c || col; g.fillStyle = cc;
+    if (glow || c) { g.shadowColor = cc; g.shadowBlur = glow || 16; }
+    g.fillText(t, x0, y); x0 += g.measureText(t).width; g.shadowBlur = 0; }
+  g.restore(); return w;
+}
+function pop(t, t0, w = 18, z = .55) { return t < t0 ? 0 : spring(t - t0, w, z); }
+function slam(t, t0, s, x, y, size, col, glow = 40) {
+  if (t < t0) return; const d = t - t0, k = 1 + .8 * (1 - spring(d, 10, .9));
+  g.save(); g.translate(x, y); g.scale(k, k); txt(s, 0, 0, size, col, 'center', 900, clamp(d / .08), glow); g.restore();
+  if (d < .7) { g.save(); g.strokeStyle = col; g.globalAlpha = .8 * (1 - d / .7); g.lineWidth = 6; g.beginPath(); g.arc(x, y, 100 + 800 * eo(d / .7), 0, 7); g.stroke(); g.restore(); }
+}
+function stamp(t, t0, s, x, y, col, rot = -.12, size = 54) {
+  if (t < t0) return; const d = t - t0, k = 1 + 1.4 * (1 - spring(d, 20, .8));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(k, k); g.globalAlpha = clamp(d / .06);
+  g.strokeStyle = col; g.lineWidth = 6; g.font = `900 ${size}px ${FONT}`; const w = g.measureText(s).width + 50;
+  g.beginPath(); g.roundRect(-w / 2, -size * .8, w, size * 1.6, 12); g.stroke(); txt(s, 0, 2, size, col, 'center', 900, 1, 0); g.restore();
+}
+
+// ---------- stage ----------
+function stage(cx = W / 2, glow = 1) {
+  const rg = g.createRadialGradient(cx, -200, 50, cx, 300, 1100); rg.addColorStop(0, `rgba(255,255,255,${.13 * glow})`); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  const fl = g.createRadialGradient(cx, 820, 20, cx, 820, 700); fl.addColorStop(0, `rgba(255,255,255,${.07 * glow})`); fl.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = fl; g.beginPath(); g.ellipse(cx, 820, 760, 120, 0, 0, 7); g.fill();
+}
+// mannequin figure: feet at (x,y), height ~ 330*s. pose: stand / read / cheer / slump / think / pull
+function figure(x, y, s, col, pose = 'stand', t = 0, a = 1) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; g.translate(x, y); g.scale(s, s);
+  const shade = col === C.red ? '#b8261c' : col === C.gold ? '#c99a2a' : C.figS;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  // shadow
+  g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.ellipse(0, 4, 70, 12, 0, 0, 7); g.fill();
+  const limb = (pts, w, c) => { g.strokeStyle = c; g.lineWidth = w; g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.stroke(); };
+  const slump = pose === 'slump', hy = slump ? -258 : -290, hx = slump ? 18 : 0;
+  // legs
+  limb([-18, -140, -24, -70, -26, 0], 26, shade); limb([18, -140, 24, -70, 28, 0], 26, col);
+  // torso
+  g.fillStyle = col; g.beginPath(); g.roundRect(-38 + hx * .3, -248 + (slump ? 18 : 0), 76, 120, 30); g.fill();
+  g.fillStyle = shade; g.globalAlpha *= .35; g.beginPath(); g.roundRect(8 + hx * .3, -244 + (slump ? 18 : 0), 26, 112, 14); g.fill(); g.globalAlpha /= .35;
+  // arms
+  const sh = -228 + (slump ? 18 : 0);
+  if (pose === 'read') { limb([-34, sh, -50, -170, -10, -175], 22, shade); limb([34, sh, 50, -170, 10, -175], 22, col); }
+  else if (pose === 'cheer') { const w = Math.sin(t * 8) * 8; limb([-34, sh, -70, -300 + w, -80, -360 + w], 22, shade); limb([34, sh, 70, -300 - w, 80, -360 - w], 22, col); }
+  else if (pose === 'think') { limb([-34, sh, -50, -150, -40, -110], 22, shade); limb([34, sh, 60, -200, 30, -270], 22, col); }
+  else if (pose === 'pull') { limb([-34, sh, -50, -150, -40, -110], 22, shade); limb([34, sh, 90, -300, 60, -340], 22, col); }
+  else if (pose === 'slump') { limb([-34, sh, -46, -150, -40, -90], 22, shade); limb([34, sh, 46, -150, 40, -90], 22, col); }
+  else { limb([-34, sh, -46, -160, -44, -110], 22, shade); limb([34, sh, 46, -160, 44, -110], 22, col); }
+  // head
+  const hg = g.createRadialGradient(hx - 12, hy - 14, 4, hx, hy, 46); hg.addColorStop(0, '#fff'); hg.addColorStop(.35, col); hg.addColorStop(1, shade);
+  g.fillStyle = hg; g.beginPath(); g.arc(hx, hy, 40, 0, 7); g.fill();
+  g.restore();
+}
+function book(x, y, w, h, col, open = 0, a = 1) {   // centered, open 0..1
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; g.translate(x, y);
+  if (open > .5) { g.fillStyle = '#f4f2ec'; g.beginPath(); g.moveTo(-w, -h / 2); g.quadraticCurveTo(-w / 2, -h / 2 - 10, 0, -h / 2 + 6); g.lineTo(0, h / 2); g.quadraticCurveTo(-w / 2, h / 2 - 12, -w, h / 2); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(w, -h / 2); g.quadraticCurveTo(w / 2, -h / 2 - 10, 0, -h / 2 + 6); g.lineTo(0, h / 2); g.quadraticCurveTo(w / 2, h / 2 - 12, w, h / 2); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 3; for (let i = 0; i < 5; i++) { const yy = -h / 2 + 22 + i * (h - 40) / 5; g.beginPath(); g.moveTo(-w + 18, yy); g.lineTo(-18, yy + 3); g.moveTo(18, yy + 3); g.lineTo(w - 18, yy); g.stroke(); } }
+  else { g.fillStyle = '#ddd9cf'; g.fillRect(-w / 2 + 6, -h / 2 + 6, w, h); g.fillStyle = col; g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, 6); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(-w / 2 + 10, -h / 2, 8, h); }
+  g.restore();
+}
+function stack(x, y, n, a = 1) { for (let i = 0; i < n; i++) { g.save(); g.globalAlpha *= a; const c = ['#c94a3c', '#3c6fc9', '#e3e0d6', '#3c3c44', '#c9a03c'][i % 5];
+  g.fillStyle = c; g.beginPath(); g.roundRect(x - 80 + (rnd(i) - .5) * 14, y - (i + 1) * 22, 160, 20, 3); g.fill(); g.fillStyle = '#f4f2ec'; g.fillRect(x - 74 + (rnd(i) - .5) * 14, y - (i + 1) * 22 + 4, 150, 3); g.restore(); } }
+function paper(x, y, w, h, rot, a = 1, k = 1) { if (a <= 0) return; g.save(); g.globalAlpha *= a; g.translate(x, y); g.rotate(rot); g.scale(k, k);
+  g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 40; g.fillStyle = '#f3f2ee'; g.fillRect(-w / 2, -h / 2, w, h); g.shadowBlur = 0; g.restore(); }
+function card(x, y, w, h, a = 1, border = 'rgba(255,255,255,.18)') { if (a <= 0) return; g.save(); g.globalAlpha *= a; g.fillStyle = 'rgba(28,28,32,.92)'; g.strokeStyle = border; g.lineWidth = 2;
+  g.beginPath(); g.roundRect(x - w / 2, y - h / 2, w, h, 16); g.fill(); g.stroke(); g.restore(); }
+function counter(t, t0, from, to, dur = .8) { return t < t0 ? from : lerp(from, to, eo((t - t0) / dur)); }
+
+// ---------- chrome ----------
+function titleBar() { g.fillStyle = 'rgba(255,255,255,.045)'; g.fillRect(0, 0, W, 108); g.fillStyle = C.red; g.fillRect(70, 32, 8, 44);
+  txt('为什么你学得越[认真]，考得反而越[差]？', 100, 55, 44, C.white, 'left', 800); }
+function section(t) { const L = [['groups', 'cross', '实验一 · 重读 vs 考自己'], ['exp2', 'conf', '实验二 · 读 14 遍 vs 考 3 次'], ['why', 'practice', '为什么']];
+  for (const [a, b, s] of L) { const v = win(t, SC[a].start, SC[b].end, .3); if (v > 0) txt(s, 72, 150, 26, C.grey, 'left', 600, v); } }
+function subtitle(t) { const s = TL.subs.find(([a, b]) => t >= a && t < b); if (!s) return;
+  g.save(); g.font = `700 40px ${FONT}`; const w = g.measureText(s[2]).width; g.fillStyle = 'rgba(0,0,0,.55)'; g.beginPath(); g.roundRect(W / 2 - w / 2 - 24, 990, w + 48, 60, 10); g.fill(); g.restore();
+  txt(s[2], W / 2, 1021, 40, C.white, 'center', 700); }
+
+// ---------- scenes ----------
+function sHook(t) { const c = SC.hook; stage();
+  const winK = pop(t, c.win, 14, .7);
+  const n14 = Math.round(counter(t, c.r14, 14, 14)), stackN = Math.round(counter(t, c.r14 - .3, 9, 14, .9));
+  g.save(); g.globalAlpha *= 1 - .5 * clamp(winK); stack(560, 830, stackN);
+  figure(780, 830, 1.15, C.red, winK > .5 ? 'slump' : 'read', t);
+  book(780, 640, 70, 52, '#c94a3c', 0); g.restore();
+  figure(1180, 830, 1.15, C.fig, winK > .5 ? 'cheer' : 'stand', t);
+  book(1300, 770, 60, 80, '#3c6fc9', 0);
+  card(670, 330, 340, 130, 1, C.red); txt('读了 [14] 遍', 670, 330, 54, C.white, 'center', 900);
+  card(1240, 330, 340, 130, 1); txt('只读 {3} 遍', 1240, 330, 54, C.white, 'center', 900);
+  if (t >= c.r14 && t < c.r14 + .4) { g.save(); g.strokeStyle = C.red; g.lineWidth = 4; g.globalAlpha = 1 - (t - c.r14) / .4; g.beginPath(); g.roundRect(500 - 20 * (t - c.r14), 265, 340 + 40 * (t - c.r14), 130, 16); g.stroke(); g.restore(); }
+  txt('一周后考试', 955, 470, 34, C.grey, 'center', 600, ss(c.r3 + .8, c.r3 + 1.1, t));
+  stamp(t, c.win, '赢', 1400, 520, C.gold, -.15, 80);
+}
+function sPaper(t) { const c = SC.paper; stage();
+  const k = spring(t - c.start, 12, .8); paper(W / 2, lerp(900, 540, k), 620, 760, -.04 + .04 * k);
+  g.save(); g.translate(W / 2, lerp(900, 540, k)); g.rotate(-.04 + .04 * k);
+  txt('PSYCHOLOGICAL SCIENCE · 2006', 0, -300, 22, '#9a2a20', 'center', 700);
+  txt('Test-Enhanced Learning', 0, -230, 46, '#1b1b1f', 'center', 800);
+  txt('Taking Memory Tests Improves Long-Term Retention', 0, -175, 22, '#444', 'center', 500);
+  txt('Henry L. Roediger III & Jeffrey D. Karpicke', 0, -120, 22, '#666', 'center', 500);
+  g.fillStyle = '#c7c5bf'; for (let i = 0; i < 10; i++) g.fillRect(-250, -60 + i * 34, i % 4 === 3 ? 300 : 500, 10);
+  g.restore();
+  stamp(t, c.journal, '《心理科学》', 1460, 780, C.red, .1, 56);
+  txt('不是鸡汤', 330, 480, 60, C.white, 'center', 900, ss(c.start + .3, c.start + .6, t));
+  txt('是{实验}', 330, 570, 60, C.white, 'center', 900, ss(c.start + .6, c.start + .9, t));
+}
+function sGroups(t) { const c = SC.groups; stage();
+  const a1 = pop(t, c.g1 - .3), a2 = pop(t, c.g2 - .3);
+  for (let i = 0; i < 3; i++) { figure(380 + i * 170, 840, .8, C.fig, 'read', t, clamp(a1 * 1.2)); book(380 + i * 170, 700, 52, 40, '#3c6fc9', 1, clamp(a1 * 1.2)); }
+  for (let i = 0; i < 3; i++) { figure(1200 + i * 170, 840, .8, C.fig, 'think', t, clamp(a2 * 1.2)); book(1230 + i * 170, 770, 50, 34, '#c94a3c', 0, clamp(a2 * 1.2)); }
+  card(550, 330, 440, 150, a1, C.red); txt('A 组', 550, 300, 30, C.grey, 'center', 700, a1); txt('读完，[再读一遍]', 550, 350, 46, C.white, 'center', 900, a1);
+  card(1370, 330, 520, 150, a2, C.gold); txt('B 组', 1370, 300, 30, C.grey, 'center', 700, a2); txt('合上书，{全写下来}', 1370, 350, 46, C.white, 'center', 900, a2);
+  if (t < c.g1 - .3) txt('同一篇文章', W / 2, 520, 60, C.white, 'center', 900, ss(c.start + .2, c.start + .5, t));
+}
+// shared memory chart (min5 + cross)
+const CH = { x0: 360, x1: 1560, y0: 860, y1: 300 }, XS = [0, .5, 1];
+const RE = [81, 54, 42], TE = [75, 68, 56];
+function chart(t, tm) {   // tm = {p0, p1, p2} reveal times
+  const X = i => lerp(CH.x0 + 120, CH.x1 - 60, XS[i]), Y = v => lerp(CH.y0, CH.y1, v / 100);
+  g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 3; g.beginPath(); g.moveTo(CH.x0, CH.y1 - 40); g.lineTo(CH.x0, CH.y0); g.lineTo(CH.x1, CH.y0); g.stroke();
+  txt('一周后还记得多少', CH.x0, CH.y1 - 70, 26, C.grey, 'left', 600);
+  ['5 分钟后', '2 天后', '1 周后'].forEach((s, i) => txt(s, X(i), CH.y0 + 40, 30, i && t < tm[`p${i}`] ? '#444' : C.white, 'center', 700));
+  [[RE, C.red, '重读'], [TE, C.gold, '考自己']].forEach(([D, col, lab], li) => {
+    const pts = D.map((v, i) => [X(i), Y(v)]); let shown = 0;
+    for (let i = 0; i < 3; i++) if (t >= tm[`p${i}`] + (li ? .5 : 0) * (i === 0 ? 2.6 : .0)) shown = i + 1;
+    // when reveal of point i: draw segment growing
+    g.save(); g.strokeStyle = col; g.lineWidth = 7; g.shadowColor = col; g.shadowBlur = 18; g.beginPath();
+    for (let i = 0; i < 3; i++) { const ti = i === 0 ? (li ? tm.p0b : tm.p0) : tm[`p${i}`]; if (t < ti) break;
+      const k = i === 0 ? 1 : eo((t - ti) / .6); const [x, y] = i === 0 ? pts[0] : [lerp(pts[i - 1][0], pts[i][0], k), lerp(pts[i - 1][1], pts[i][1], k)];
+      i === 0 ? g.moveTo(x, y) : g.lineTo(x, y); }
+    g.stroke(); g.restore();
+    for (let i = 0; i < 3; i++) { const ti = i === 0 ? (li ? tm.p0b : tm.p0) : tm[`p${i}`] + .5; if (t < ti) continue;
+      const k = pop(t, ti, 20, .5), [x, y] = pts[i];
+      g.save(); g.fillStyle = col; g.beginPath(); g.arc(x, y, 12 * k, 0, 7); g.fill(); g.restore();
+      txt(`${D[i]}%`, x + (li ? 0 : 0), y + (D[i] === Math.max(RE[i], TE[i]) ? -50 : 54), 46 * k, col, 'center', 900, 1, 14); }
+    const lt = li ? tm.p0b : tm.p0; g.save(); g.globalAlpha *= ss(lt, lt + .3, t); g.fillStyle = col; g.fillRect(CH.x0 + 340 + li * 200, CH.y1 - 80, 36, 8); g.restore(); txt(lab, CH.x0 + 386 + li * 200, CH.y1 - 76, 30, col, 'left', 800, ss(lt, lt + .3, t));
+  });
+}
+function sMin5(t) { const c = SC.min5; stage(); chart(t, { p0: c.n81, p0b: c.n75, p1: 1e9, p2: 1e9 });
+  txt('[重读] 领先', 1250, 640, 48, C.white, 'center', 900, ss(c.n75 + 1.2, c.n75 + 1.5, t)); }
+function sCross(t) { const c = SC.cross; stage(1, 1.2); chart(t, { p0: 0, p0b: 0, p1: c.n68, p2: c.week });
+  g.save(); g.globalAlpha = 1 - ss(c.start + 1.5, c.start + 2.2, t); slam(t, c.start, '反超', 1100, 600, 170, C.gold, 50); g.restore();
+  txt('考自己的一周后 ≈ 重读的两天后', 1560, 220, 30, C.grey, 'right', 600, ss(c.week + 1.0, c.week + 1.3, t)); }
+function sExp2(t) { const c = SC.exp2; stage();
+  const n14 = counter(t, c.r14 - .4, 1, 14.2, 1.2), n3 = counter(t, c.r3 - .3, 1, 3.4, .8);
+  stack(520, 840, Math.round(n14)); figure(720, 840, 1.0, C.red, 'read', t); book(720, 670, 60, 46, '#c94a3c', 1);
+  card(620, 300, 400, 150, 1, C.red); txt('读了', 620, 270, 30, C.grey, 'center', 700); txt(`[${n14.toFixed(1)}] 遍`, 620, 325, 60, C.white, 'center', 900);
+  figure(1260, 840, 1.0, C.fig, t > c.t3 ? 'think' : 'read', t);
+  for (let i = 0; i < 3; i++) { const ti = c.t3 + i * .35; if (t < ti) continue; const k = spring(t - ti, 16, .7); paper(1470 + i * 50, lerp(400, 700 - i * 24, k), 150, 190, -.15 + i * .12, 1, .9);
+    txt('TEST', 1470 + i * 50, lerp(400, 700 - i * 24, k) - 60, 22, C.red, 'center', 900); }
+  card(1300, 300, 460, 150, 1, C.gold); txt('读 1 遍 + {考 3 次}', 1300, 270, 30, C.grey, 'center', 700, ss(c.t3 - .2, c.t3, t) || 1);
+  txt(`共读 {${n3.toFixed(1)}} 遍`, 1300, 325, 60, C.white, 'center', 900);
+}
+function sRes2(t) { const c = SC.res2; stage();
+  txt('一周后，还记得', W / 2, 220, 40, C.grey, 'center', 700);
+  const bar = (x, v, col, t0, lab, sub) => { const k = eo((t - t0) / .8), h = 520 * v / 100 * k;
+    g.save(); g.fillStyle = col; g.shadowColor = col; g.shadowBlur = 24; g.beginPath(); g.roundRect(x - 120, 860 - h, 240, h, 10); g.fill(); g.restore();
+    if (t > t0) txt(`${Math.round(v * k)}%`, x, 860 - h - 50, 80, col, 'center', 900, 1, 20);
+    txt(lab, x, 910, 34, C.white, 'center', 800); txt(sub, x, 952, 26, C.grey, 'center', 600); };
+  bar(700, 40, C.red, c.n40, '读 14 遍', '只读不考'); bar(1220, 61, C.gold, c.n61, '读 3 遍 + 考 3 次', '少读一大半');
+}
+function sConf(t) { const c = SC.conf; stage();
+  txt('考前问他们：「一周后你能记住多少？」', W / 2, 230, 40, C.white, 'center', 800, ss(c.start + .2, c.start + .5, t));
+  const meter = (x, v, col, lab, real) => { const k = eo((t - (c.start + .8)) / 1.0);
+    g.save(); g.strokeStyle = 'rgba(255,255,255,.15)'; g.lineWidth = 34; g.lineCap = 'round'; g.beginPath(); g.arc(x, 620, 200, Math.PI, 2 * Math.PI); g.stroke();
+    g.strokeStyle = col; g.shadowColor = col; g.shadowBlur = 20; g.beginPath(); g.arc(x, 620, 200, Math.PI, Math.PI + Math.PI * v / 7 * k); g.stroke(); g.restore();
+    txt(`${(v * k).toFixed(1)}`, x, 580, 84, col, 'center', 900); txt('自信 / 7 分', x, 650, 26, C.grey, 'center', 600);
+    txt(lab, x, 730, 36, C.white, 'center', 800); txt(real, x, 790, 30, C.grey, 'center', 700, ss(c.conf + .6, c.conf + .9, t)); };
+  meter(640, 4.8, C.red, '读 14 遍的', '实际：[40%]'); meter(1280, 4.0, C.gold, '读 3 遍 + 考 3 次的', '实际：{61%}');
+  stamp(t, c.conf, '最自信', 900, 420, C.red, -.1, 52);
+}
+function sWhy(t) { const c = SC.why; stage(W / 2, .8);
+  figure(760, 860, 1.25, C.red, 'read', t); book(760, 640, 120, 90, '#c94a3c', 1);
+  const reads = Math.min(5, 1 + Math.floor((t - c.start) / .45)); txt(`第 [${reads}] 遍`, 760, 330, 64, C.white, 'center', 900);
+  ['这一句', '这一段', '这个公式', '这道例题'].forEach((s, i) => { const ti = c.start + .6 + i * .35; const k = pop(t, ti, 18, .6); if (k <= 0) return;
+    g.save(); g.translate(1250 + (i % 2) * 220, 420 + i * 110); g.scale(k, k); card(0, 0, 230, 80); txt(s, 0, -8, 30, C.white, 'center', 800); txt('✓ 好像会了', 0, 22, 20, C.gold, 'center', 600); g.restore(); });
+  if (t >= c.half) { g.save(); g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, 860, W, 120); g.restore(); txt('每一句看起来都很——', W / 2, 920, 64, C.white, 'center', 900, ss(c.half, c.half + .15, t)); }
+}
+function sEye(t) { const c = SC.eye; stage(W / 2, 1.1);
+  const fade = 1 - ss(c.fool - .4, c.fool, t);
+  slam(t, c.start, '眼熟', W / 2, 470, 260, C.gold, 60);
+  if (fade > 0 && t < c.fool) txt('≠ 会了', W / 2, 700, 70, C.white, 'center', 900, ss(c.start + .6, c.start + .9, t));
+  if (t >= c.fool - .2) { g.save(); g.globalAlpha = ss(c.fool - .2, c.fool + .1, t); g.fillStyle = C.bg; g.fillRect(0, 0, W, H); g.restore(); stage();
+    figure(700, 860, 1.1, C.red, t > c.out - .3 ? 'pull' : 'stand', t);
+    const k1 = pop(t, c.fool - .2); g.save(); g.translate(720, 330); g.scale(k1, k1); card(0, 0, 330, 110); txt('大脑：[我会了 ✓]', 0, 0, 38, C.white, 'center', 800); g.restore();
+    book(1180, 760, 150, 100, '#3c6fc9', t > c.out - .6 ? 0 : 1);
+    if (t > c.out - .6) { stamp(t, c.out - .6, '合上书', 1180, 640, C.white, .08, 36);
+      const k = eo((t - c.out) / .8); g.save(); g.strokeStyle = C.gold; g.lineWidth = 6; g.setLineDash([14, 12]); g.lineDashOffset = -t * 60; g.beginPath(); g.moveTo(760, 560); g.quadraticCurveTo(960, 300, lerp(760, 1300, k), lerp(560, 360, k)); g.stroke(); g.restore();
+      if (t > c.out) { card(1380, 340, 300, 100, pop(t, c.out + .5), C.gold); txt('{从脑子里拿出来}', 1380, 340, 36, C.white, 'center', 900, pop(t, c.out + .5)); } }
+  }
+}
+function sPractice(t) { const c = SC.practice; stage();
+  const steps = ['合上书', '硬想', '想不起来', '再翻开']; const R = 270, cx = 620, cy = 580;
+  g.save(); g.strokeStyle = 'rgba(255,255,255,.15)'; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke(); g.restore();
+  const per = .7, act = Math.floor((t - c.start) / per) % 4;
+  steps.forEach((s, i) => { const an = -Math.PI / 2 + i * Math.PI / 2, x = cx + Math.cos(an) * R, y = cy + Math.sin(an) * R, on = i === act && t < c.see;
+    card(x, y, 220, 90, 1, on ? C.gold : 'rgba(255,255,255,.18)'); txt(s, x, y, 36, on ? C.gold : C.white, 'center', 800); });
+  txt('练「拿出来」', cx, cy, 34, C.white, 'center', 900);
+  const k1 = pop(t, c.see - .2), k2 = pop(t, c.train - .2);
+  g.save(); g.translate(1370, 420); g.scale(k1, k1); card(0, 0, 520, 150, 1); txt('读十遍 = 在[看] 👀', 0, 0, 52, C.white, 'center', 900); g.restore();
+  g.save(); g.translate(1370, 640); g.scale(k2, k2); card(0, 0, 520, 150, 1, C.gold); txt('考一遍 = 在{练} ✍️', 0, 0, 52, C.white, 'center', 900); g.restore();
+}
+function sRedefine(t) { const c = SC.redefine; stage();
+  txt('下次觉得{眼熟}的时候', W / 2, 260, 56, C.white, 'center', 900, ss(c.start + .2, c.start + .5, t));
+  book(W / 2, 560, 180, 130, '#3c6fc9', t < c.close ? 1 : 0);
+  if (t > c.close) stamp(t, c.close, '先合上', W / 2 + 240, 470, C.gold, .12, 40);
+  if (t > c.q - .2) { paper(W / 2, 760, 900, 150, 0, pop(t, c.q - .2, 16, .8));
+    const n = Math.floor(clamp((t - c.q) / 1.2) * 11); txt('不看，我能写出来吗？'.slice(0, n), W / 2, 760, 60, '#1b1b1f', 'center', 900); }
+}
+function sEnd(t) { const c = SC.end; stage(W / 2, 1.1);
+  const k = .9 + .1 * spring(t - c.start, 12, .8);
+  g.save(); g.translate(W / 2, 360); g.scale(k, k); txt('你最常用的复习方法是？', 0, 0, 80, C.white, 'center', 900); g.restore();
+  const a = pop(t, c.ask - .2), b = pop(t, c.ask + .5);
+  g.save(); g.translate(660, 620); g.scale(a, a); card(0, 0, 440, 170, 1, C.red); txt('📖 [重读]', 0, 0, 64, C.white, 'center', 900); g.restore();
+  g.save(); g.translate(1260, 620); g.scale(b, b); card(0, 0, 440, 170, 1, C.gold); txt('✍️ {考自己}', 0, 0, 64, C.white, 'center', 900); g.restore();
+  txt('评论区说说 👇', W / 2, 820, 44, C.grey, 'center', 700, ss(c.ask + 1.2, c.ask + 1.5, t));
+}
+const FN = { hook: sHook, paper: sPaper, groups: sGroups, min5: sMin5, cross: sCross, exp2: sExp2, res2: sRes2, conf: sConf, why: sWhy, eye: sEye, practice: sPractice, redefine: sRedefine, end: sEnd };
+const HARD = new Set(['hook', 'cross', 'eye']);
+function frame(t) {
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  for (const s of TL.scenes) { const a = SC[s.name].start, b = SC[s.name].end;
+    if (t < a - .01 || t >= b + .3) continue;
+    const nextHard = TL.scenes.findIndex(x => x.name === s.name) + 1 < TL.scenes.length && HARD.has(TL.scenes[TL.scenes.findIndex(x => x.name === s.name) + 1].name);
+    if (t >= b && nextHard) continue;
+    const fi = HARD.has(s.name) ? 1 : clamp((t - a) / .3), fo = t < b ? 1 : clamp((b + .3 - t) / .3);
+    g.save(); g.globalAlpha = Math.min(fi, fo); FN[s.name](t); g.restore(); }
+  section(t); titleBar(); subtitle(t);
+  for (const c of CLIMAX) if (t > c - .75 && t < c) { g.fillStyle = `rgba(0,0,0,${.75 * ss(c - .75, c - .1, t)})`; g.fillRect(0, 0, W, H); }
+  const vg = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .95); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(255,255,255,.022)'; const fs = Math.floor(t * 24); for (let i = 0; i < 240; i++) g.fillRect(rnd(fs * 1000 + i) * W, rnd(fs * 2000 + i) * H, 2, 2);
+}
+function coverFrame() {
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  const rg = g.createRadialGradient(W / 2, -100, 50, W / 2, 500, 1200); rg.addColorStop(0, 'rgba(255,255,255,.14)'); rg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  txt('为什么你学得越[认真]', W / 2, 200, 92, C.white, 'center', 900);
+  txt('考得反而越[差]？', W / 2, 330, 104, C.white, 'center', 900);
+  stack(250, 1180, 14); figure(420, 1180, 1.0, C.red, 'slump'); figure(780, 1180, 1.0, C.fig, 'cheer', .3);
+  card(330, 560, 400, 170, 1, C.red); txt('读 [14] 遍', 330, 530, 56, C.white, 'center', 900); txt('一周后 [40%]', 330, 600, 40, C.grey, 'center', 800);
+  card(760, 560, 400, 170, 1, C.gold); txt('读 {3} 遍', 760, 530, 56, C.white, 'center', 900); txt('一周后 {61%}', 760, 600, 40, C.grey, 'center', 800);
+  const vg = g.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * .9); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+}
+window.ready = false;
+window.render = function (t) {
+  for (const c of CLIMAX) if (t >= c - .1 && t < c) t = c - .1;
+  g.setTransform(VW / W, 0, 0, VH / H, 0, 0);
+  if (COVER) coverFrame(); else frame(t);
+};
+document.fonts.ready.then(() => { window.render(0); window.ready = true; });
+</script></body></html>

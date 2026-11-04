@@ -3,7 +3,7 @@
 import json, os, sys, time
 from playwright.sync_api import sync_playwright
 
-PROFILE = os.path.expanduser('~/.config/douyin/douyin-pw-profile')
+PROFILE = os.path.expanduser(os.environ.get('DOUYIN_PROFILE', '~/.config/douyin/pw-profile'))
 UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36')
 with sync_playwright() as p:

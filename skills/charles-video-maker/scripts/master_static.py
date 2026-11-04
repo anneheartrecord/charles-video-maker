@@ -13,10 +13,11 @@ x, sr = sf.read('mix_raw.wav')
 def lufs(path):
     out = subprocess.run(['ffmpeg', '-hide_banner', '-i', path, '-af', 'ebur128=peak=true', '-f', 'null', '-'], capture_output=True, text=True).stderr
     return float(re.findall(r'I:\s+(-?[\d.]+) LUFS', out)[-1]), float(re.findall(r'Peak:\s+(-?[\d.]+) dBFS', out)[-1])
-y = x
-for _ in range(4):
+y, ceil = x, .7
+for _ in range(8):
     sf.write('mix.wav', y, sr, subtype='PCM_24'); I, tp = lufs('mix.wav')
     if abs(I + 14) < .3 and tp <= -1.5: break
+    if abs(I + 14) < .3: ceil *= 10 ** (-.5 / 20)   # loudness is right but inter-sample peaks are not: lower the ceiling
     y = y * 10 ** ((-14 - I) / 20)
-    y = X.limit(y, ceil=.7) if y.ndim == 1 else np.stack([X.limit(y[:, 0], ceil=.7), X.limit(y[:, 1], ceil=.7)], 1)
+    y = X.limit(y, ceil=ceil) if y.ndim == 1 else np.stack([X.limit(y[:, 0], ceil=ceil), X.limit(y[:, 1], ceil=ceil)], 1)
 sf.write('mix.wav', y, sr, subtype='PCM_24'); print('LUFS %.1f  true peak %.1f' % lufs('mix.wav'))

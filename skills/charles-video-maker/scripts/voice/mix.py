@@ -4,6 +4,11 @@
   mix.py --dir <project>                    # needs audio/timeline.json, audio/scenes.json, audio/voice.wav
   mix.py --dir <project> --music 0          # narration and effects only
   mix.py --dir <project> --score audio/score.wav   # a sampled score (score.py) instead of the lo-fi bed
+  mix.py --dir <project> --score audio/score.wav --open-boost 10 --open-lift 5   # Douyin: louder opening, voice kept clear
+
+Douyin opening (2026-11-04, measured on three projects): --open-boost alone with no ducking (the old way) put the
+music within 1-2 dB of the first line and buried it. --open-boost 10 --open-lift 5 (open-duck .5 by default) gave the
+first 3 s +3.0 to +3.1 dB over the body with the music 7.8 to 8.9 dB under the voice. The last line printed checks both.
 
 Music ducks under the voice. Each cue gets a sound: 'pop' by default, or the kind set in scenes.json
 ("kind": {"scene.cue": "stamp" | "coin" | "print" | "pop" | "tick" | "pencil"}). Every scene change gets a soft whoosh.
@@ -19,7 +24,9 @@ ap.add_argument('--dir', default='.')
 ap.add_argument('--music', type=float, default=.32, help='music level under the voice (0 = no music)')
 ap.add_argument('--bpm', type=float, default=96)
 ap.add_argument('--score', help='mono WAV to use as the music bed instead of the synthesized lo-fi (score.py writes one)')
-ap.add_argument('--open-boost', type=float, default=0, help='dB to push the music up in the first 3 s, barely ducked (Douyin: the opening is the strongest part); mastering then keeps the level difference (master_static.py)')
+ap.add_argument('--open-boost', type=float, default=0, help='dB to push the music up in the first 3 s (Douyin: the opening is the strongest part); it still ducks under the voice down to --open-duck, and swells in the gaps before and between words')
+ap.add_argument('--open-duck', type=float, default=.5, help='music gain floor under the voice in the boosted opening (1 = no ducking; .85, the old value, buried the first line)')
+ap.add_argument('--open-lift', type=float, default=0, help='dB to raise the whole first 3 s, voice and music together, so the opening is louder without the music masking the voice; mastering keeps the difference (master_static.py)')
 args = ap.parse_args()
 os.chdir(args.dir)
 TL = json.load(open('audio/timeline.json'))
@@ -144,13 +151,17 @@ if args.score:
     bed = np.zeros(n); add(bed, 0, s_)
 else:
     bed = music * .9 + drums * .55 + crackle * .5
+OPEN = args.open_boost or args.open_lift
+tt = np.arange(n) / SR; w_ = np.clip((3.6 - tt) / .6, 0, 1)   # 1 for the first 3 s, fading out by 3.6 s
 if args.open_boost:
-    tt = np.arange(n) / SR; w_ = np.clip((3.6 - tt) / .6, 0, 1)
-    duck = duck * (1 - w_) + np.maximum(duck, .85) * w_; bed = bed * (1 + (10 ** (args.open_boost / 20) - 1) * w_)
-mix = bed * duck * args.music + sfx * .5 + voice
+    duck = duck * (1 - w_) + np.maximum(duck, args.open_duck) * w_; bed = bed * (1 + (10 ** (args.open_boost / 20) - 1) * w_)
+bedm = bed * duck * args.music
+mix = bedm + sfx * .5 + voice
 mix = mix[:int(DUR * SR)]
 fade = int(1.2 * SR); mix[-fade:] *= np.linspace(1, 0, fade)
 mix /= np.abs(mix).max(); mix = np.tanh(mix * 2.0)          # soft clip the drum peaks
+if args.open_lift:   # after the soft clip, so the lift is a clean static gain on the opening
+    mix *= 1 + (10 ** (args.open_lift / 20) - 1) * w_[:len(mix)]
 mix /= np.abs(mix).max() / .9
 with wave.open('audio/mix_raw.wav', 'wb') as w:
     w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes((mix * 32767).astype(np.int16).tobytes())
@@ -158,7 +169,7 @@ with wave.open('audio/mix_raw.wav', 'wb') as w:
 # loudness -14 LUFS, then limit: AAC encoding adds up to ~0.8 dB of true peak, so leave room for it
 os.makedirs('qa', exist_ok=True)
 tools = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'audio_tools.py')
-if args.open_boost:   # single-pass loudnorm would flatten the louder opening; static gain + peak limiter keeps it
+if OPEN:   # single-pass loudnorm would flatten the louder opening; static gain + peak limiter keeps it
     subprocess.run([os.path.expanduser('~/lemo-opuscar/.venv/bin/python'), os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'master_static.py')], cwd='audio', check=True)
     open('audio/mix_norm.wav', 'w').close()
 else:
@@ -167,3 +178,13 @@ else:
 for f in ('audio/mix_raw.wav', 'audio/mix_norm.wav'):
     os.remove(f)
 print(subprocess.run(['python3', tools, 'check', 'audio/mix.wav', '--out', 'qa/audio'], capture_output=True, text=True).stdout.splitlines()[0])
+
+# Opening QA: how much louder the first 3 s are than the body (target >= +2 dB), and how loud the music sits under
+# the voice while the first line is spoken (target <= -6 dB; above that the music buries the words)
+db = lambda a: 20 * np.log10(np.sqrt(np.mean(a ** 2)) + 1e-12)
+fsr = 48000; fin = np.frombuffer(subprocess.run(['ffmpeg', '-loglevel', 'error', '-i', 'audio/mix.wav', '-ac', '1', '-ar', str(fsr), '-f', 'f32le', '-'],
+                                               capture_output=True, check=True).stdout, np.float32).astype(float)
+o, e = int(3 * fsr), len(fin) - int(3 * fsr)
+voiced = (venv > .2 * venv.max())[:int(3 * SR)]
+mv = db(bedm[:int(3 * SR)][voiced]) - db(voice[:int(3 * SR)][voiced]) if voiced.any() and args.music else None
+print('opening 0-3 s vs body: %+.1f dB   music under the first line: %s' % (db(fin[:o]) - db(fin[o:e]), 'no music' if mv is None else '%+.1f dB vs voice' % mv))

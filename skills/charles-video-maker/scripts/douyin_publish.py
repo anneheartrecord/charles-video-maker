@@ -6,7 +6,8 @@
   douyin_publish.py <slug> now                  # 立即发布
   加 --dry 只填表核对，不点发布。
 
-登录态：专用持久化配置 ~/.config/douyin/douyin-pw-profile（扫码登录过一次）。
+登录态：专用持久化浏览器配置，路径取环境变量 DOUYIN_PROFILE（默认 ~/.config/douyin/pw-profile，扫码登录过一次）。
+工程目录取环境变量 DOUYIN_WORKDIR（默认 ~/Desktop/video/vibe-video），<slug> 是其中的子目录。
 环境变量 DOUYIN_NICKNAME 设了就核对登录的是不是这个账号，不对就退出。
 不要再从 Chrome 搬 cookie——10-22 搬过几次后服务端把会话踢下线了。
 发布前逐项核对（标题、时间、公开、tags、封面检测），任一不对就退出，不点发布。
@@ -14,8 +15,8 @@
 import glob, os, sys, time
 from playwright.sync_api import sync_playwright
 
-ROOT = os.path.expanduser('~/Desktop/video/vibe-video')
-PROFILE = os.path.expanduser('~/.config/douyin/douyin-pw-profile')
+ROOT = os.path.expanduser(os.environ.get('DOUYIN_WORKDIR', '~/Desktop/video/vibe-video'))
+PROFILE = os.path.expanduser(os.environ.get('DOUYIN_PROFILE', '~/.config/douyin/pw-profile'))
 UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36')
 

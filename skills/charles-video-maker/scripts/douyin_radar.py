@@ -5,7 +5,7 @@
   python3 douyin_radar.py rank   --out DIR                          # 总点赞榜 + 72 小时内每小时点赞榜
   python3 douyin_radar.py get    --out DIR <aweme_id> [name] ...    # 下载原片到 DIR/refs/（签名地址几小时内有效）
 
-cookie：优先用 ~/.config/douyin/douyin-cookies.txt（600 权限，只含抖音域名）；校验登录失效时自动从本机 Chrome 重新导出
+cookie：优先用环境变量 DOUYIN_COOKIES 指的文件（默认 ~/.config/douyin/cookies.txt，600 权限，只含抖音域名）；校验登录失效时自动从本机 Chrome 重新导出
 并覆盖保存（必须带 sessionid 才算导出成功）。也可单独跑 `douyin_radar.py login` 只刷新并校验。
 """
 import argparse, json, os, re, subprocess, sys, time, urllib.parse
@@ -56,7 +56,7 @@ def scroll(page, n, label):
             last = len(aw)
 
 
-COOKIE = os.path.expanduser('~/.config/douyin/douyin-cookies.txt')
+COOKIE = os.path.expanduser(os.environ.get('DOUYIN_COOKIES', '~/.config/douyin/cookies.txt'))
 
 def export_cookies(tries=3):
     """Chrome -> COOKIE (douyin domains only). The Chrome export is flaky (sometimes returns ~20 cookies, no sessionid): retry."""
@@ -83,7 +83,7 @@ def whoami(ctx):
         return u.get('nickname')
     except Exception: return None
 
-PROFILE = os.path.expanduser('~/.config/douyin/douyin-pw-profile')   # dedicated browser profile: logs in once, stays logged in
+PROFILE = os.path.expanduser(os.environ.get('DOUYIN_PROFILE', '~/.config/douyin/pw-profile'))   # dedicated browser profile: logs in once, stays logged in
 
 def save_cookies(ctx):
     rows = ['# Netscape HTTP Cookie File']

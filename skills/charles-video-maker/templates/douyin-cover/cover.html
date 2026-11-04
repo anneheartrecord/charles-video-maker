@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+/* Douyin cover over a still (AI 剧照 route), 3:4 or 4:3. Distilled from the 你身上的 bug series covers (2026-10-25).
+   render.py "cover.html?img=<abs path>&l1=第一行&l2=[第二行]" out/<NAME>-封面.png --still 0 --size 1080x1440
+   render.py "cover.html?r=43&img=<abs path>&l1=..&l2=.." out/横封面-4x3.png --still 0 --size 1440x1080
+   Params: img (absolute path of the still) · l1, l2 (two title lines, ≤ 8 characters each; [词] marks the one gold word)
+           pos (horizontal crop of the still, 0%–100%; smaller when the subject sits left) · r=43 for the 4:3 cover
+           tag + no (optional series label and episode number, top left) · foot (optional account name, bottom left)
+   The 4:3 cover must be rendered from this page: a video frame or a blurred 3:4 cover gets flagged by Douyin as a
+   screenshot cover, and douyin_publish.py stops. */
+html,body{margin:0;overflow:hidden;background:#0d0d0f;font-family:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC",sans-serif}
+body{width:1080px;height:1440px}body.r43{width:1440px;height:1080px}
+#bg{position:absolute;inset:0;background-size:cover;background-position:center}
+#shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 22%,rgba(0,0,0,0) 40%,rgba(0,0,0,.82) 65%,rgba(0,0,0,.95) 100%)}
+#tag{position:absolute;left:64px;top:64px;display:flex;align-items:center;gap:18px}
+#tag .s{background:#e8423f;color:#fff;font-weight:800;font-size:44px;padding:10px 24px;border-radius:10px;letter-spacing:2px}
+#tag .n{color:#fff;font-weight:900;font-size:64px;font-family:"DIN Alternate","Helvetica Neue",sans-serif;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+#title{position:absolute;left:64px;right:64px;bottom:150px;color:#fff;font-weight:900;font-size:100px;line-height:1.18;letter-spacing:2px;text-shadow:0 4px 18px rgba(0,0,0,.7)}
+body.r43 #title{bottom:130px;font-size:104px}
+#title b{color:#ffc94a}
+#foot{position:absolute;left:64px;bottom:64px;color:rgba(255,255,255,.72);font-size:36px;letter-spacing:6px}
+</style></head><body><div id="bg"></div><div id="shade"></div>
+<div id="tag"><span class="s" id="tagname"></span><span class="n" id="no"></span></div>
+<div id="title"></div><div id="foot"></div>
+<script>
+const q = new URLSearchParams(location.search), $ = id => document.getElementById(id);
+const hl = s => (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]).replace(/\[(.+?)\]/g, '<b>$1</b>');
+if (q.get('r') === '43') document.body.className = 'r43';
+if (q.get('img')) $('bg').style.backgroundImage = `url("file://${q.get('img')}")`;
+$('bg').style.backgroundPosition = (q.get('pos') || '50%') + ' center';
+if (q.get('tag')) { $('tagname').textContent = q.get('tag'); $('no').textContent = q.get('no') ? 'No.' + q.get('no') : ''; } else $('tag').style.display = 'none';
+$('title').innerHTML = hl(q.get('l1')) + '<br>' + hl(q.get('l2'));
+$('foot').textContent = q.get('foot') || '';
+window.render = () => {};
+</script></body></html>

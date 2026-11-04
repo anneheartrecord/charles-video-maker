@@ -1,6 +1,6 @@
 # 抖音知识号：复刻爆款，一锅出
 
-> 来源：蔚蓝 WEILANX《Opus 5.5 抖音起号超级保姆级万字教程》（2026-10-18，单号 29 条留 10 条、基本万播以上、最高 108 万）的第五、六章，按本 skill 的工具改写。账号怎么养、怎么判断、怎么投抖加、号废了怎么办，不在这里，在用户的运营手册：`<handbook-dir>/抖音运营手册.md`（下称「手册」）。
+> 来源：蔚蓝 WEILANX《Opus 5.5 抖音起号超级保姆级万字教程》（2026-10-18，单号 29 条留 10 条、基本万播以上、最高 108 万）的第五、六章，按本 skill 的工具改写。账号怎么养、怎么判断、怎么投抖加、号废了怎么办，不在这里，在用户自己维护的运营手册里（下称手册，路径记在环境变量 `DOUYIN_HANDBOOK`；没有手册也能出片，跳过读手册和数据写回两步即可）。
 >
 > 核心一句：**Opus 自由发挥做出来的东西，大概率不是市场验证过的样子。**所以不从想法出发，从一条正在爆的原片出发：风格一比一，内容不搬，在画面冲击力、质感、卡点三处做得比它更好。
 
@@ -8,7 +8,7 @@
 
 用户说「做抖音视频」「抖音一期」「复刻这条」，给的是抖音链接或从抖音下载的原片，或者说「用 <风格名> 做一期：<选题>」。用户说「找选题」「抓热点」「Vibe 有什么在火」「给我 N 个选题」时，先走下面的 **D-1 找选题**。用户给链接就等于同意下载这条原片（下载用任一抖音视频解析站拿无水印版，放进 `source/`）。
 
-**工程目录**：抖音视频一律建在 `~/Desktop/video/vibe-video/<slug>/`（不是通用默认的 `~/Desktop/video/<slug>/`）；同级还有原片库 `_refs/`、风格库 `_styles/`、题材雷达脚本 `_tools/douyin_radar.py`（软链到本 skill 的 `scripts/douyin_radar.py`）。
+**工程目录**：抖音视频一律建在抖音工作目录 `$DOUYIN_WORKDIR/<slug>/`（环境变量，默认 `~/Desktop/video/vibe-video`，不是通用默认的 `~/Desktop/video/<slug>/`）；同级放原片库 `_refs/`、风格工作副本 `_styles/`，题材雷达可以软链一份到 `_tools/douyin_radar.py`。`douyin_publish.py` 按这个目录找 `<slug>/out/`。
 
 ## 授权到底，不停下来问
 
@@ -30,23 +30,23 @@
 | 封面 / 第 0 帧 | 亮底高对比、暴论开头 | 跟蒸馏出的风格走（深色也行）；第 0 帧起顶部挂标题条 |
 | 标题 | 覆盖搜索词 | 20 字内、第二人称 + 痛点、留悬念不给答案；封面字和片内标题一致 |
 | tags | 5 个，搜索量大的 | 5 个以内，**#Vibe知识大赏 必带** + 2–4 个贴选题的 |
-| 交付 | 成片、封面、publish.txt | 再加 3:4 封面、字幕稿、交付报告，并在手册「发布记录」追加一行 |
+| 交付 | 成片、封面、publish.txt | 再加 3:4 竖封面、4:3 横封面、`.srt` 字幕稿、交付报告，并在手册「发布记录」追加一行 |
 
 其余（`render(t)` 只由时间决定、逐镜头自检、渲染脚本、文件命名）照常按 SKILL.md 和 craft-rules.md。
 
 ## D-1：找选题（题材雷达）
 
-用户要选题、或者要做视频却没给原片时，从这里开始。脚本 `scripts/douyin_radar.py`（`~/Desktop/video/vibe-video/_tools/douyin_radar.py` 是它的软链），数据落 `~/Desktop/video/vibe-video/_refs/<日期>/`。
+用户要选题、或者要做视频却没给原片时，从这里开始。脚本 `scripts/douyin_radar.py`，数据落 `$DOUYIN_WORKDIR/_refs/<日期>/`。
 
-**登录**：抖音网页搜索必须登录，不登录一条都抓不到。脚本按「专用浏览器配置 `~/.config/douyin/douyin-pw-profile` 已登录 → 已存 cookie `~/.config/douyin/douyin-cookies.txt` → 从本机 Chrome 现导（必须带 sessionid）→ 弹窗扫码」的顺序自动登录，成功后自动保存，下次不用再登。先跑 `python3 douyin_radar.py login` 确认登录（打印 `logged in as <昵称>`），再抓。**不要把 cookie 搬进别的浏览器反复用**：2026-10-22 把 Chrome 的 cookie 注入自动化浏览器发了几条视频后，服务端把这个会话踢下线了。
+**登录**：抖音网页搜索必须登录，不登录一条都抓不到。脚本按「专用浏览器配置 `$DOUYIN_PROFILE`（默认 `~/.config/douyin/pw-profile`）已登录 → 已存 cookie `$DOUYIN_COOKIES`（默认 `~/.config/douyin/cookies.txt`）→ 从本机 Chrome 现导（必须带 sessionid）→ 弹窗扫码」的顺序自动登录，成功后自动保存，下次不用再登。先跑 `python3 douyin_radar.py login` 确认登录（打印 `logged in as <昵称>`），再抓。**不要把 cookie 搬进别的浏览器反复用**：2026-10-22 把 Chrome 的 cookie 注入自动化浏览器发了几条视频后，服务端把这个会话踢下线了。
 
 **抓两轮，合并排名**：
 
 ```
-cd ~/Desktop/video/vibe-video/_tools; D=../_refs/$(date +%F)
-python3 douyin_radar.py crawl --sort 2 --days 0 --hashtag --name latest_all --out $D   # 最新发布，倒序前 ~100 条 + 话题页
-python3 douyin_radar.py crawl --sort 1 --days 7 --name hot7 --out $D                   # 一周内最多点赞
-python3 douyin_radar.py rank --name latest_all,hot7 --out $D                           # 总点赞榜 + 72 小时内每小时点赞榜
+cd "$DOUYIN_WORKDIR"; R=<本 skill 目录>/scripts; D=_refs/$(date +%F)
+python3 $R/douyin_radar.py crawl --sort 2 --days 0 --hashtag --name latest_all --out $D   # 最新发布，倒序前 ~100 条 + 话题页
+python3 $R/douyin_radar.py crawl --sort 1 --days 7 --name hot7 --out $D                   # 一周内最多点赞
+python3 $R/douyin_radar.py rank --name latest_all,hot7 --out $D                           # 总点赞榜 + 72 小时内每小时点赞榜
 ```
 
 「一天内」筛选网页端只返回个位数，别用。网页接口不给播放量，用点赞、转发、收藏代替。出滑块就请用户拖一下（专用配置过一次后基本不再出）。
@@ -97,19 +97,21 @@ python3 douyin_radar.py rank --name latest_all,hot7 --out $D                    
 
 5. **能写成「被冤枉 → 翻案」或第二人称痛点**；收藏率、点赞率高的题材簇优先（第一轮数据里它们比分享率更能拉开流量差距）。
 
-6. **去重**：对照手册「七、发布记录」和 `~/Desktop/video/vibe-video/` 已有工程，做过的不再选；同一簇（心理关系 / 物理定律套人生 / 概率数学 / 认知偏差 / 博弈哲学）别连着扎堆。
+6. **去重**：对照手册「七、发布记录」和 `$DOUYIN_WORKDIR` 下已有工程，做过的不再选；同一簇（心理关系 / 物理定律套人生 / 概率数学 / 认知偏差 / 博弈哲学）别连着扎堆。
 
 7. 避开国内合规红线（投资标的、境外开户等）、政治时事、医疗建议。
 
-**交付**：写 `<handbook-dir>/题材雷达-<日期>.md`：正在涨的原片表（发布小时、点赞 / 转发 / 收藏、作者粉丝、看点）+ 10–20 个选题表（暂定标题、类型：复刻 / 题材迁移、对标原片、一手资料、能画的东西）+ 推荐先做哪几条及理由。要复刻的原片用 `douyin_radar.py get <aweme_id> <名字> --name latest_all,hot7 --out $D` 下载（签名地址几小时内有效，挑完马上下）。
+**交付**：在手册同目录写 `题材雷达-<日期>.md`（没有手册就写进 `$DOUYIN_WORKDIR/_refs/<日期>/`）：正在涨的原片表（发布小时、点赞 / 转发 / 收藏、作者粉丝、看点）+ 10–20 个选题表（暂定标题、类型：复刻 / 题材迁移、对标原片、一手资料、能画的东西）+ 推荐先做哪几条及理由。要复刻的原片用 `douyin_radar.py get <aweme_id> <名字> --name latest_all,hot7 --out $D` 下载（签名地址几小时内有效，挑完马上下）。
 
-**做成系列（用户 2026-10-24 定）**：视频之间要连贯，同一个系列名、同一个主角、同一个世界，用合集串起来。怎么做见 [douyin-series.md](douyin-series.md)。
+**做成系列**：2026-10-24 定过同一个系列名、同一个主角、同一个世界；10-27 起改成单条发、不在片内突出系列，现行做法见 [douyin-series.md](douyin-series.md)。
+
+**一次做好几条**：一条一个子 agent 并行做，主 agent 分活、验收、串行排发布，见 [douyin-batch.md](douyin-batch.md)。
 
 **发布与拉数据**：`scripts/douyin_publish.py <slug> "YYYY-MM-DD HH:MM"|now` 上传、填表、定时发布，发布前逐项核对，任一不对就停；用户定的档位是每天 08:00、11:00、14:00、17:00、22:00，定时须在 2 小时后、14 天内，不足 2 小时的档到点用 `now` 直发。`scripts/douyin_stats.py <out.json>` 拉全部已发作品的指标（播放、点赞率、收藏率、分享率、2 秒跳出、5 秒完播、平均观看秒数、涨粉），`scripts/douyin_comments.py <dir> <aweme_id>...` 拉评论和详情。三个脚本都用专用浏览器配置，同一时间只能跑一个。**同一条视频只上传一次**：传上去就有指纹，删掉也还在；remake 要发就把剧照、标题、简介、封面全换掉，当成新视频。2026-10-27 bug 系列 01、02 原版和 remake 各传过一次，发出后只拿到 34 和 23 次播放（手册第六节第 11 条）。
 
 ## D0：开工先读手册
 
-读手册的「六、数据结论」（选题和标题按它来）和「五、风格库」（这套风格蒸馏过没有）。风格库在 `~/Desktop/video/vibe-video/_styles/<风格名>/`。原片的风格已在库里，跳过 D1。
+读手册的「六、数据结论」（选题和标题按它来）和「五、风格库」（这套风格蒸馏过没有）。风格库在本 skill 的 `styles/`，现有五套，挑法见 `styles/README.md`；工作目录里的 `_styles/` 是工作副本，新蒸馏的风格定稿后同步回 `styles/`。原片的风格已在库里，跳过 D1。
 
 ## D1：蒸馏风格（机器拆一遍，人眼再拆一遍）
 
@@ -126,7 +128,7 @@ python3 scripts/audio_tools.py beats source/ref-audio.wav > source/ref-beats.jso
 
 **人眼拆**：机器只知道哪里变了，不知道为什么好看。先通看联系表，把画面分类（标题卡、图表、实物、大字……）；再逐张看关键帧，放大看字体、描边、发光；把入场、转场、招牌动作各切一小段，一帧一帧数：几帧完成、先快后慢还是匀速、有没有模糊和缩放。
 
-**写进风格库** `~/Desktop/video/vibe-video/_styles/<风格名>/`：
+**写进风格库** `styles/<风格名>/`（本 skill 目录下）：
 
 - `style.md` 风格配方卡：配色和字体、背景和质感、版式、标题卡、字幕、转场、节奏、招牌画面，最后一节「没有搬的东西」（原片字幕、标题、创作者名、水印、配乐一律不进库）
 
@@ -150,7 +152,15 @@ python3 scripts/audio_tools.py beats source/ref-audio.wav > source/ref-beats.jso
 
 - **第一句**：观众一秒认出自己的一个生活场景或疑问，平静陈述，0.3 秒内上字幕；人声可以在 0.3–1 秒内跟上，也可以前 3 秒只有配乐 + 字幕（两种都做样片比）。
 
-- **混音别用单遍 `loudnorm`**：它是动态模式，会把故意做响的开头压到和正文一样响。做法：开头 3 秒的音乐和音效在混音里推高约 4 dB（几乎不压在人声下），再用 `scripts/master_static.py`（静态增益到 -14 LUFS + 只削尖峰的限幅）出 `mix.wav`。验收时量一下 0–3 秒和正文的 RMS，开头应高出约 3 dB 以上（闪电样片实测 -13.7 vs -17 dB）。
+- **开头做响，但配乐要给第一句让路**：混音一律用 `scripts/voice/mix.py --score audio/score.wav --open-boost 10 --open-lift 5`，不用单遍 `loudnorm`，它会把故意做响的开头压到和正文一样响。带开头参数时，mix.py 会自动改走 `scripts/master_static.py`，用静态增益到 -14 LUFS，再加只削尖峰的限幅。三个参数分工如下：
+
+  - `--open-boost`：把开头 3 秒的配乐推高，人声的空档里配乐涨满。
+  - `--open-duck`：开头里人声下面配乐最低压到多少，默认 0.5。
+  - `--open-lift`：把开头 3 秒人声和配乐整体抬高，比例不变。
+
+  **为什么改**（2026-11-04）：旧做法是配乐推高、几乎不避让，10-28 那批实测开头只比正文高 1.7～2.6 dB；再往上推，配乐就和人声差不多响，第一句被盖住。用旧参数重混，第一句下面的配乐只比人声低 0.7～1.7 dB。新参数在 confidence-age、birth-order、smartest-age 三条上重混，开头比正文高 3.0～3.1 dB，第一句下面的配乐比人声低 7.8～8.9 dB，真峰值都在 -1.4 dBFS 以下。
+
+  **验收看 mix.py 最后一行**：开头 0～3 秒比正文高 **+2.5 dB 以上**，第一句下面的配乐比人声低 **6 dB 以上**，两个都过才算过。开头不够响就加 `--open-lift`，配乐压字就降 `--open-duck`，别再单推 `--open-boost`。`--open-lift` 超过 6 会让限幅器明显压人声，听着发闷。
 
 - **配乐只用 CC0 采样**：Lemo 采样库里的流行鼓组 `drum_kit`（MuldjordKit）是 CC BY 4.0，用了必须署名，抖音简介里不方便挂；鼓用 CC0 的 `bass_drum`、`snare`、`crash`、`hihat`、`timpani`。合成后看一眼 `score-credits.txt`，只剩 CC0 才算过。
 
@@ -158,7 +168,7 @@ python3 scripts/audio_tools.py beats source/ref-audio.wav > source/ref-beats.jso
 
 ### 其余硬要求
 
-- **前 3 秒必须抓人**：第一句是一个人人都有经验、却答不上来的问题，或一个反常识的结论 / 具体数字；第 0 帧就有完整的主体画面，不能是空镜或只有标题条。
+- **前 5 秒必须抓人**：按 [douyin-opening.md](douyin-opening.md) 的开头 5 秒四拍做。第一句是一句完整的人话，用你做主语，直接问观众，或者直接说出一个和观众认知相反的事实；5 秒内让人听到反差和那个数字（2026-10-25 起从 3 秒放宽到 5 秒，卡 3 秒只能写出碎片）。第 0 帧就有完整的主体画面，不能是空镜或只有标题条。
 
 - **画面能多炫有多炫**：每 2–3 秒一个新的视觉动作；至少一个招牌镜头（粒子、光效、镜头推拉、物体爆开 / 拼合、慢动作、剖面透视）；高潮用收暗 → 静止 → 砸字 + 冲击波。
 
@@ -200,7 +210,7 @@ python3 scripts/audio_tools.py beats source/ref-audio.wav > source/ref-beats.jso
 
 ## D4：制作与自查
 
-- 从 `_styles/<风格名>/template.html` 起步写 `index.html`，按 SKILL.md 第 5 步逐镜头做。
+- 从 `styles/<风格名>/template.html` 起步写 `index.html`；没有对标原片、只有选题时，从 `templates/horizontal-explainer/` 起步（标题条、字幕、高潮收暗砸字、两种封面都现成）。按 SKILL.md 第 5 步逐镜头做。
 
 - 每个镜头做完渲静帧看；全部搭完跑 `qa_stills.py` 出每个镜头切走前一帧的拼图，再把两个高潮前后几帧单独渲出来拼一张（`render.py --still`）。逐张看：字有没有重叠、出画，该出现的有没有出现，高潮那一帧标题是不是已经亮了。
 
@@ -208,21 +218,23 @@ python3 scripts/audio_tools.py beats source/ref-audio.wav > source/ref-beats.jso
 
 - **最多改三轮**，剩下的小问题写进交付报告，不无限打磨。
 
-- 响度：混音 `audio_tools.py normalize` 到 -14 LUFS，`audio_tools.py check` 出数字，把被配乐盖住的音效单独列出来。**AI 听不到声音**，只报数字，交付时提醒用户戴耳机听一遍。
+- 响度：混音只走上面开头 3 秒那节的命令（`mix.py --open-boost 10 --open-lift 5`，内部走 `master_static.py` 到 -14 LUFS），**不要再对成品跑 `audio_tools.py normalize`**，它是单遍 loudnorm，会把开头抹平。成片出来后用 `audio_tools.py check` 量真峰值，要 ≤ -1 dBTP；超了只降增益重压音轨，不重新 normalize。把 mix.py 最后一行的两个数字、被配乐盖住的音效写进报告。**AI 听不到声音**，只报数字，交付时提醒用户戴耳机听一遍。
 
 ## D5：交付（全部放 `out/`）
 
 1. `publish.txt`：按 SKILL.md 的三段格式，标题、简介、tags 取自 Gemini 的 `copy/copy.json`（已过 `check`）。标题 20 字内、第二人称 + 痛点、留悬念（「躲进掩体，为什么还被打死？」好过「掩体为什么挡不住子弹」）；简介第一句写钩子，再写这期要点；tags 一行 5 个以内，#Vibe知识大赏 打头。
 
-2. 成片 `$NAME.mp4`。
+2. 成片 `$NAME.mp4`。`out/` 顶层只能有这一条 mp4：`douyin_publish.py` 取的是 `out/*.mp4` 的第一条，样片和旧版挪进 `out/样片/`。
 
 3. 3:4 封面 `$NAME-封面.png`（1080×1440）：竖版片子把封面帧裁安全区（`ffmpeg -y -i cover-full.png -vf crop=1080:1440:0:240 out/$NAME-封面.png`）；横版片子单独用 `?cover=1` 页面按 1080×1440 重新排版渲一张（`render.py "index.html?cover=1" ... --size 1080x1440`），不要从 16:9 硬裁。封面上的标题和片内标题一致，缩到 360px 宽还看得清。
 
-4. 字幕稿 `$NAME-字幕.txt`：按时间顺序的全部屏幕文字。
+4. 横封面 `横封面-4x3.png`（1440×1080）：`douyin_publish.py` 发布时必传，文件名固定。单独排版渲一张，入口二选一：纯代码页面用 `render.py "index.html?cover=43" out/横封面-4x3.png --still 0 --size 1440x1080`（`templates/horizontal-explainer/` 已支持）；AI 剧照路线用 `render.py "templates/douyin-cover/cover.html?r=43&img=<剧照绝对路径>&l1=..&l2=.." out/横封面-4x3.png --still 0 --size 1440x1080`。**不要用视频截帧，也不要拿 3:4 封面模糊铺底**：这两种都实测被抖音判成截屏当封面，发布脚本检测到会停下。
 
-5. 交付报告 `report.md`：资料来源、哪些数字是自己算的、替用户做了哪些决定、对标原片学了什么没搬什么、剩下的小瑕疵、提醒用户戴耳机听。
+5. 字幕稿 `$NAME-字幕.srt`：`cp audio/subs.srt "out/$NAME-字幕.srt"`，带时间码的旁白字幕，发布或剪辑时可直接导入。
 
-6. 在手册「七、发布记录」表追加一行（日期、标题、对标原片、风格，6 小时数据留空等用户回填）。
+6. 交付报告 `report.md`：资料来源、哪些数字是自己算的、替用户做了哪些决定、对标原片学了什么没搬什么、剩下的小瑕疵、提醒用户戴耳机听。
+
+7. 在手册「七、发布记录」表追加一行（日期、标题、对标原片、风格，6 小时数据留空等用户回填）。
 
 ## 改稿
 

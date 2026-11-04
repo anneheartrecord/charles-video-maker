@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""用本地 Antigravity CLI（agy，走用户自己的 Google 账号，不花中转站余额）生成一张剧照。
+"""用本地 Antigravity CLI（agy，走你自己的 Google 账号）生成一张剧照。
 
   agy_image.py "Cinematic film still, ..." source/plate_hook.png [--aspect 16:9] [--retries 3]
 
 agy 原生出图约 1376x768（16:9），脚本按 --aspect 放大到 1920x1080 / 1080x1440 等，保留原图为 *.raw.png。
-全机最多同时 5 个 agy 出图（文件锁），多个子任务并行也不会互相挤爆。需要代理 127.0.0.1:7890。
-2026-10-24：REDACTED 出图余额耗尽后改用这个；画质与 gpt-image-2 相当。
+全机最多同时 5 个 agy 出图（文件锁），多个子任务并行也不会互相挤爆。agy 不读系统代理，需要时用环境变量 GEMINI_PROXY
+指定（和 gemini_copy.py 同一个变量，默认 http://127.0.0.1:7890）。画质与 gpt-image-2 相当。
 Google 账号的出图额度按时间窗重置（实测一个窗口约二三十张）：碰到 QUOTA_EXHAUSTED 不算重试次数，
 按 agy 报的重置时间睡到点再出（最多等 6 小时），全机共用一个 ~/.cache/agy_image/quota_until 标记，别的进程看到也一起等。
 """
@@ -59,7 +59,8 @@ def main():
     ap.add_argument('--aspect', default='16:9', choices=list(SIZES)); ap.add_argument('--retries', type=int, default=3)
     a = ap.parse_args()
     out = os.path.abspath(a.out); os.makedirs(os.path.dirname(out), exist_ok=True)
-    env = dict(os.environ, https_proxy='http://127.0.0.1:7890', http_proxy='http://127.0.0.1:7890')
+    px = os.environ.get('GEMINI_PROXY', 'http://127.0.0.1:7890')
+    env = dict(os.environ, https_proxy=px, http_proxy=px)
     k = 0
     while k < a.retries:
         wait_quota()

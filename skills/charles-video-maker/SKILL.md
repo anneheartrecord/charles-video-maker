@@ -23,14 +23,14 @@ description: >-
 |---|---|---|
 | 一条视频（宣传片、动效、知识讲解、文字稿转视频） | 下面的视频流程（第 0–6 步） | 本文件 |
 | 一张插图 / 交互图 / 原理图（给文档、博客、落地页用），不是视频 | Anatomy 的流程，产出 HTML、SVG 或 React 组件 | `anatomy/SKILL.md`，kit 在 `anatomy/kit/` |
-| 抖音视频（「做抖音视频」「复刻这条」、给了抖音链接或原片、「用 <风格名> 做一期」；「找选题」「抓热点」「Vibe 有什么在火」先走其中的 D-1 找选题） | 复刻爆款、一锅出：蒸馏原片风格 → 重写文案 → 先测配乐再排画面 → 交付，中途不问，覆盖下面流程的多项默认值 | `references/douyin-remake.md` |
+| 抖音视频（「做抖音视频」「复刻这条」、给了抖音链接或原片、「用 <风格名> 做一期」；「找选题」「抓热点」「Vibe 有什么在火」先走其中的 D-1 找选题） | 复刻爆款、一锅出：蒸馏原片风格 → 重写文案 → 先测配乐再排画面 → 交付，中途不问，覆盖下面流程的多项默认值 | `references/douyin-remake.md`；一次做好几条再读 `references/douyin-batch.md`；风格库在 `styles/` |
 | 一条讲原理的视频，概念能对应到一台会动的机器 | 先按 Anatomy 造机器，再按视频流程配音、包装、渲染 | `references/anatomy-video.md` |
 
 用户嫌画面全是插图、不够精美，或者手上有原视频、要讲的是产品或游戏：照样走视频流程，开工四选的「画面」选「素材打底」，见 [references/footage-layer.md](references/footage-layer.md)。
 
 用户点名一种画风（油画厚涂、水彩、浮世绘、水墨、像素 RPG、卫星简报……），或者嫌画面太素想要更有质感的画风：照样走下面的视频流程，画面规范从 Lemo-Opuscar 风格库里取，见 [references/lemo-styles.md](references/lemo-styles.md)。
 
-拿不准时：讲「东西怎么运作」的，优先考虑机器；讲观点、清单、价格的，用讲解模板（`templates/vertical-explainer/`）。两者可以混在一条视频里。
+拿不准时：讲「东西怎么运作」的，优先考虑机器；讲观点、清单、价格的，用讲解模板（竖版 `templates/vertical-explainer/`，横版 `templates/horizontal-explainer/`）。两者可以混在一条视频里。
 
 ## 视频流程
 
@@ -70,7 +70,7 @@ video/<slug>/
 
 抖音视频不走第 1–3 步，按 [references/douyin-remake.md](references/douyin-remake.md) 一路做到交付。
 
-**先问开工四选。** 用 AskUserQuestion 一次问完：画面（默认代码画面，可选素材打底，或 Lemo 风格库里的一种）、规格（默认竖版短视频 1080×1920 / 30fps，可选横版短片 1920×1080 / 24fps）、配音（默认 Gemini，额度用完时自动切后备男声男播报员；可选 edge-tts / Kokoro / 不配音）、流程（默认三个方案加预览，可选只问一次就开拍）。每项第一个选项是默认值，标「（推荐）」；用户已经说清楚的项不问。每个选项具体改什么、怎么准备，见 [references/lemo-styles.md](references/lemo-styles.md)；选了素材打底，按 [references/footage-layer.md](references/footage-layer.md) 准备素材（要下载原片、录需要登录的网站，先问用户）。选了 Lemo 画风或 Kokoro 时，马上在后台跑 `sh scripts/lemo/setup.sh deps`（首次要几分钟）。
+**先问开工四选。** 用 AskUserQuestion 一次问完：画面（默认代码画面，可选素材打底，或 Lemo 风格库里的一种）、规格（默认竖版短视频 1080×1920 / 30fps，可选横版短片 1920×1080 / 24fps）、配音（默认 Gemini，额度用完时自动切到 edge-tts；可选 edge-tts / Kokoro / 不配音）、流程（默认三个方案加预览，可选只问一次就开拍）。每项第一个选项是默认值，标「（推荐）」；用户已经说清楚的项不问。每个选项具体改什么、怎么准备，见 [references/lemo-styles.md](references/lemo-styles.md)；选了素材打底，按 [references/footage-layer.md](references/footage-layer.md) 准备素材（要下载原片、录需要登录的网站，先问用户）。选了 Lemo 画风或 Kokoro 时，马上在后台跑 `sh scripts/lemo/setup.sh deps`（首次要几分钟）。
 
 先问用户想做什么，接受三种原材料，给了哪种就用哪种，可以混着给：
 

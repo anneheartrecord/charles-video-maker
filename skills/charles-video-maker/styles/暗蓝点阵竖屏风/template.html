@@ -1,0 +1,246 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<script src="timeline.js"></script>
+<style>html,body{margin:0;background:#070a12;overflow:hidden}canvas{display:block}</style>
+</head><body><canvas id="c"></canvas>
+<script>
+// 世界上没有「平均人」 —— render(t) only; scene starts / cues come from timeline.js (window.TL)
+const Q = new URLSearchParams(location.search), COVER = Q.get('cover') === '1';
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+cv.width = innerWidth; cv.height = innerHeight;
+const W = 1080, H = 1920;
+const SANS = '"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif';
+const SERIF = '"Songti SC","STSong","Noto Serif CJK SC",serif';
+const C = { bg: '#070a12', ink: '#e9ecf2', grey: '#7d8597', dim: '#252b3a', gold: '#f2c14e', red: '#ff5a4e', blue: '#4fc3e8', green: '#5fd89a' };
+const SC = {}; TL.scenes.forEach((s, i) => SC[s.name] = { start: s.start, end: i + 1 < TL.scenes.length ? TL.scenes[i + 1].start : TL.total, cues: s.cues });
+const cue = (sc, k) => SC[sc].cues[k];
+const CLIMAX = [SC.zero.start, cue('flip', 'slam')];
+
+// ---------- math ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const ss = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const eo = k => 1 - Math.pow(1 - clamp(k), 3);
+function spring(x, w = 15, z = .72) { if (x <= 0) return 0; const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * x) * (Math.cos(wd * x) + (z * w / wd) * Math.sin(wd * x)); }
+function rnd(s) { s = Math.sin(s * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+const win = (t, a, b, f = .25) => clamp(Math.min((t - a) / f, (b - t) / f));
+const pop = (t, t0) => t0 == null ? 0 : spring(t - t0, 18, .6);
+
+// ---------- text: [red] {gold} <blue> ----------
+function segs(s) { const out = []; let cur = '', col = null; const map = { '[': C.red, '{': C.gold, '<': C.blue };
+  for (const ch of s) { if (map[ch]) { if (cur) out.push([cur, col]); cur = ''; col = map[ch]; }
+    else if (']}>'.includes(ch)) { if (cur) out.push([cur, col]); cur = ''; col = null; } else cur += ch; }
+  if (cur) out.push([cur, col]); return out; }
+function txt(s, x, y, size, o = {}) {
+  const col = o.c || C.ink, a = o.a ?? 1; if (a <= 0) return 0;
+  g.save(); g.globalAlpha *= a; g.font = `${o.w || 700} ${size}px ${o.serif ? SERIF : SANS}`; g.textBaseline = 'middle';
+  const sg = segs(s); const w = sg.reduce((p, [t]) => p + g.measureText(t).width, 0);
+  let x0 = o.al === 'left' ? x : o.al === 'right' ? x - w : x - w / 2;
+  for (const [t, c] of sg) { g.fillStyle = c || col; if (o.glow || c) { g.shadowColor = c || col; g.shadowBlur = o.glow || 14; }
+    g.fillText(t, x0, y); x0 += g.measureText(t).width; g.shadowBlur = 0; }
+  g.restore(); return w;
+}
+function rr(x, y, w, h, r, fill, stroke, lw = 2) { g.beginPath(); g.roundRect(x, y, w, h, r); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); } }
+
+// ---------- header / title / subs ----------
+const CHAPTERS = [['hook', '01', '一次测量'], ['funnel', '02', '十道关'], ['hundred', '03', '最平均的人'], ['adjust', '04', '可调的座椅'], ['life', '05', '你']];
+function header(t) {
+  let ch = CHAPTERS[0]; CHAPTERS.forEach(c => { if (t >= SC[c[0]].start) ch = c; });
+  txt('平均人', 80, 236, 30, { al: 'left', serif: true, w: 900 }); txt('The Average Man', 182, 238, 22, { al: 'left', c: C.grey, serif: true, w: 400 });
+  txt(`${ch[1]} ${ch[2]}`, 1000, 236, 24, { al: 'right', c: C.gold, w: 600 });
+  g.fillStyle = C.dim; g.fillRect(80, 262, 920, 3); g.fillStyle = C.gold; g.fillRect(80, 262, 920 * clamp(t / TL.total), 3);
+  txt('为什么你总觉得，自己哪里都[不标准]？', 540, 330, 50, { serif: true, w: 900 });
+}
+function subs(t) {
+  const s = TL.subs.find(([a, b]) => t >= a && t < b); if (!s) return;
+  const text = s[2].replace(/(\d[\d,.]*%?)/g, '{$1}');
+  g.save(); g.fillStyle = 'rgba(7,10,18,.72)'; g.font = `700 50px ${SANS}`;
+  const w = g.measureText(s[2]).width; rr(540 - w / 2 - 28, 1566, w + 56, 82, 14, 'rgba(7,10,18,.72)'); g.restore();
+  txt(text, 540, 1607, 50, { w: 700 });
+}
+function chip(x, y, s, col, a = 1, size = 34) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; g.font = `700 ${size}px ${SANS}`; const w = g.measureText(s).width + 40;
+  rr(x - w / 2, y - size * .9, w, size * 1.8, size * .9, 'rgba(255,255,255,.04)', col, 2); txt(s, x, y, size, { c: col }); g.restore(); return w;
+}
+
+// ---------- the 4063 dots ----------
+const N = 4063, COLS = 58, CELL = 11, FX = 221, FY = 610;
+const FUN = [4063, 1055, 302, 143, 73, 28, 12, 6, 3, 2, 0];
+const DIMS = ['身高', '胸围', '袖长', '裆高', '躯干围', '臀围', '颈围', '腰围', '大腿围', '裆长'];
+const RANK = new Array(N); { const p = [...Array(N).keys()]; for (let i = N - 1; i > 0; i--) { const j = Math.floor(rnd(i * 3.7) * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } p.forEach((d, r) => RANK[d] = r); }
+function stageTimes() { const c = SC.funnel.cues; return [c.s1, c.s2, c.s3, c.s4, c.s5, c.s6, c.s7, c.s8, c.s9, SC.zero.start]; }
+function stageAt(t) { const ts = stageTimes(); let k = 0; ts.forEach((x, i) => { if (t >= x) k = i + 1; }); return k; }
+function killTime(r) { const ts = stageTimes(); for (let k = 1; k < FUN.length; k++) if (r >= FUN[k]) return ts[k - 1]; return Infinity; }
+function dotField(t, a = 1) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a;
+  const personMode = ss(cue('funnel', 's4') - .2, cue('funnel', 's4') + .6, t);
+  for (let d = 0; d < N; d++) {
+    const r = RANK[d], kt = killTime(r), x = FX + (d % COLS) * CELL + CELL / 2, y = FY + Math.floor(d / COLS) * CELL + CELL / 2;
+    if (r < 73 && personMode > 0) continue;
+    const dead = t - kt; let col = C.gold, al = .85;
+    if (dead > 0) { al = .85 * (1 - ss(0, .7, dead)); col = C.red; if (al <= .02) { g.fillStyle = 'rgba(80,90,110,.12)'; g.fillRect(x - 2, y - 2, 4, 4); continue; } }
+    g.fillStyle = col; g.globalAlpha = a * al * (1 - personMode * (r < 73 ? 1 : 0)); g.fillRect(x - 3.5, y - 3.5, 7, 7);
+  }
+  g.globalAlpha = a;
+  if (personMode > 0) persons(t, personMode);
+  g.restore();
+}
+function person(x, y, s, col, a) { if (a <= 0) return; g.save(); g.globalAlpha *= a; g.fillStyle = col;
+  g.beginPath(); g.arc(x, y - s * .55, s * .28, 0, 7); g.fill(); g.beginPath(); g.roundRect(x - s * .36, y - s * .18, s * .72, s * .8, s * .2); g.fill(); g.restore(); }
+const SLOT = [...Array(81).keys()].sort((a, b) => Math.hypot(a % 9 - 4, Math.floor(a / 9) - 4) - Math.hypot(b % 9 - 4, Math.floor(b / 9) - 4) || a - b);
+function persons(t, k) {   // the last 73 as people: 9 per row, closest-to-average in the middle
+  for (let r = 0; r < 73; r++) {
+    const col = SLOT[r] % 9, row = Math.floor(SLOT[r] / 9);
+    const x = 212 + col * 82, y = 660 + row * 88; const kt = killTime(r), dead = t - kt;
+    const alive = dead < 0; const hot = alive && FUN[stageAt(t)] <= 3;
+    const c = alive ? (hot ? C.gold : '#c9a64a') : C.red;
+    const al = alive ? 1 : (1 - ss(0, .6, dead)) * .9 + .12;
+    if (!alive && dead > .6) { g.save(); g.globalAlpha *= k * .5; g.strokeStyle = C.dim; g.lineWidth = 2; g.beginPath(); g.arc(x, y - 22, 11, 0, 7); g.stroke(); g.restore(); continue; }
+    if (hot) { g.save(); g.shadowColor = C.gold; g.shadowBlur = 30; person(x, y, 42 * (1 + .1 * Math.sin(t * 6)), c, k); g.restore(); }
+    else person(x, y, 40, c, k * al);
+  }
+}
+function counter(t, n, label, y = 450) {
+  txt(String(n), 540, y, 128, { serif: true, w: 900, c: n === 0 ? C.red : C.gold, glow: 24 });
+  if (label) txt(label, 540, y + 92, 34, { c: C.grey, w: 600 });
+}
+function funnelCount(t) { const k = stageAt(t); const ts = stageTimes(); if (k === 0) return 4063;
+  const from = FUN[k - 1], to = FUN[k], p = eo((t - ts[k - 1]) / .45); return Math.round(lerp(from, to, p)); }
+
+// ---------- bell curve ----------
+function bell(t, a, band) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; const x0 = 140, x1 = 940, base = 1160, hgt = 420;
+  const f = x => Math.exp(-Math.pow((x - .5) / .16, 2) / 2);
+  g.beginPath(); for (let i = 0; i <= 200; i++) { const u = i / 200, x = lerp(x0, x1, u), y = base - f(u) * hgt; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.strokeStyle = C.ink; g.lineWidth = 4; g.stroke();
+  if (band > 0) { const half = .5 * .385 * band;   // middle 30% of a normal ≈ ±0.385σ
+    g.beginPath(); g.moveTo(lerp(x0, x1, .5 - half * .16 / .5 * 2.6), base);
+    for (let i = 0; i <= 60; i++) { const u = .5 - half * .32 + i / 60 * half * .64; g.lineTo(lerp(x0, x1, u), base - f(u) * hgt); }
+    g.lineTo(lerp(x0, x1, .5 + half * .32), base); g.closePath(); g.fillStyle = 'rgba(242,193,78,.35)'; g.fill();
+    txt('中间 30%', 540, base + 60, 40, { c: C.gold, w: 800, a: band }); txt('= 算你「平均」', 540, base + 116, 34, { c: C.grey, w: 600, a: band }); }
+  g.strokeStyle = C.dim; g.lineWidth = 3; g.beginPath(); g.moveTo(x0 - 20, base); g.lineTo(x1 + 20, base); g.stroke();
+  txt('矮', x0, base + 36, 28, { c: C.grey }); txt('高', x1, base + 36, 28, { c: C.grey });
+  g.restore();
+}
+
+// ---------- cockpit seat (line art) ----------
+function seat(t, a, o = {}) {
+  if (a <= 0) return; g.save(); g.globalAlpha *= a; const ox = 540 + (o.dx || 0), oy = 980 + (o.dy || 0), lw = 7;
+  g.strokeStyle = o.col || C.gold; g.lineWidth = lw; g.lineCap = 'round'; g.lineJoin = 'round';
+  // seat back + cushion
+  g.beginPath(); g.moveTo(ox - 230, oy - 330); g.lineTo(ox - 170, oy + 40); g.lineTo(ox + 60, oy + 40); g.stroke();
+  g.beginPath(); g.moveTo(ox - 120, oy + 40); g.lineTo(ox - 120, oy + 200); g.moveTo(ox - 220, oy + 200); g.lineTo(ox, oy + 200); g.stroke();
+  // stick + pedal + panel
+  const px = 1.0 * (o.pedal || 0);
+  g.beginPath(); g.moveTo(ox + 120, oy + 200); g.lineTo(ox + 140, oy - 40); g.stroke(); g.beginPath(); g.arc(ox + 140, oy - 50, 14, 0, 7); g.stroke();
+  g.beginPath(); g.moveTo(ox + 270 + px, oy + 200); g.lineTo(ox + 320 + px, oy + 120); g.stroke();
+  g.beginPath(); g.moveTo(ox + 200, oy - 260); g.lineTo(ox + 340, oy - 300); g.lineTo(ox + 340, oy - 120); g.stroke();
+  g.restore();
+}
+function arrows(x, y, a, t) { if (a <= 0) return; const s = Math.sin(t * 5) * 14;
+  txt('⟷', x + s, y, 70, { c: C.blue, a }); txt('↕', x + 140, y + s, 70, { c: C.blue, a }); }
+function stamp(s, x, y, size, col, t0, t, rot = -.08) { if (t < t0) return; const k = 1 + .9 * (1 - spring(t - t0, 14, .8));
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(k, k); g.globalAlpha = clamp((t - t0) / .08);
+  g.font = `900 ${size}px ${SANS}`; const w = g.measureText(s).width + 50; rr(-w / 2, -size * .75, w, size * 1.5, 10, null, col, 6);
+  txt(s, 0, 0, size, { c: col, w: 900 }); g.restore(); }
+function jet(x, y, s, col, a) { if (a <= 0) return; g.save(); g.globalAlpha *= a; g.translate(x, y); g.scale(s, s); g.fillStyle = col;
+  g.beginPath(); g.moveTo(-160, 0); g.lineTo(140, -10); g.lineTo(170, 0); g.lineTo(140, 10); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(-10, 0); g.lineTo(-70, -110); g.lineTo(-40, -110); g.lineTo(50, 0); g.lineTo(-40, 110); g.lineTo(-70, 110); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(-150, 0); g.lineTo(-175, -50); g.lineTo(-150, -50); g.lineTo(-115, 0); g.closePath(); g.fill(); g.restore(); }
+
+// ---------- scenes ----------
+const BODY = {
+  hook(t) { counter(t, 4063, '名飞行员 · 每人量 10 项'); dotField(t);
+    if (t > cue('hook', 'q')) { const k = pop(t, cue('hook', 'q')); g.save(); g.translate(540, 990); g.scale(k, k);
+      rr(-330, -90, 660, 180, 24, 'rgba(7,10,18,.88)', C.gold, 3); txt('找到几个{「平均人」}？', 0, 0, 56, { serif: true, w: 900 }); g.restore(); } },
+  crash(t) { const s = SC.crash; jet(540, 820, 1.4, C.ink, ss(s.start, s.start + .4, t));
+    [0, 1, 2].forEach(i => stamp('事故', 330 + i * 210, 640 + (i % 2) * 340, 52, C.red, s.start + .5 + i * .35, t, -.1 + i * .08));
+    chip(380, 1220, '✓ 飞行员', C.green, pop(t, s.cues.ok1), 42); chip(720, 1220, '✓ 飞机', C.green, pop(t, s.cues.ok2), 42);
+    txt('那问题在哪？', 540, 1380, 48, { a: ss(s.cues.ok2 + .6, s.cues.ok2 + .9, t), w: 800 }); },
+  cockpit(t) { const s = SC.cockpit; seat(t, ss(s.start, s.start + .4, t));
+    [['座椅', 300, 760, s.cues.seat], ['操纵杆', 720, 870, s.cues.seat + .5], ['踏板', 860, 1240, s.cues.seat + 1.0]].forEach(([n, x, y, t0]) => chip(x, y, n, C.ink, pop(t, t0), 34));
+    if (t > s.cues.y1926) { const k = pop(t, s.cues.y1926); g.save(); g.translate(540, 1420); g.scale(k, k); rr(-300, -64, 600, 128, 16, 'rgba(242,193,78,.12)', C.gold, 3);
+      txt('照着 {1926} 年的平均身材', 0, 0, 42, { w: 800 }); g.restore(); } },
+  daniels(t) { const s = SC.daniels, k = pop(t, s.start + .1);
+    g.save(); g.translate(540, 900); g.scale(k, k); rr(-380, -300, 760, 600, 20, 'rgba(255,255,255,.03)', C.dim, 3);
+    txt('1950', 0, -170, 120, { serif: true, w: 900, c: C.gold }); txt('重新测量 4000+ 名飞行员', 0, -50, 44, { w: 800 });
+    g.restore();
+    if (t > s.cues.lt) { const k2 = pop(t, s.cues.lt); g.save(); g.translate(540, 1060); g.scale(k2, k2);
+      txt('Lt. Gilbert S. Daniels', 0, 0, 44, { serif: true, w: 700, c: C.blue }); txt('丹尼尔斯 · 年轻中尉', 0, 64, 34, { c: C.grey }); g.restore(); } },
+  range(t) { const s = SC.range; bell(t, ss(s.start, s.start + .4, t), ss(s.cues.p30 - .2, s.cues.p30 + .6, t));
+    txt('「平均」的标准，已经放得很宽', 540, 560, 44, { w: 800, a: ss(s.start + .2, s.start + .6, t) }); },
+  funnel(t) { const n = funnelCount(t), k = stageAt(t); counter(t, n, k ? `${DIMS[k - 1]}也「平均」的人` : '名飞行员'); dotField(t);
+    DIMS.forEach((d, i) => { const x = 160 + (i % 5) * 170, y = 1452 + Math.floor(i / 5) * 60, on = i < k;
+      txt((on ? '✓ ' : '') + d, x, y, 28, { c: on ? C.gold : C.grey, w: on ? 800 : 500, a: i === 9 ? .5 : 1 }); }); },
+  half(t) { counter(t, 2, '大腿围也「平均」的人'); dotField(t);
+    txt('最后一项：[裆长]', 540, 1460, 56, { w: 900, a: ss(SC.half.start, SC.half.start + .3, t) }); },
+  zero(t) { const d = t - SC.zero.start, k = 1 + .8 * (1 - spring(d, 10, .9)); dotField(t, .35);
+    g.save(); g.translate(540, 980); g.scale(k, k);
+    const rg = g.createRadialGradient(0, 0, 0, 0, 0, 520); rg.addColorStop(0, 'rgba(255,90,78,.3)'); rg.addColorStop(1, 'rgba(255,90,78,0)'); g.fillStyle = rg; g.fillRect(-600, -600, 1200, 1200);
+    txt('0', 0, -40, 520, { serif: true, w: 900, c: C.red, glow: 60 }); g.restore();
+    if (d < .8) { g.save(); g.strokeStyle = `rgba(255,90,78,${.8 * (1 - d / .8)})`; g.lineWidth = 6; g.beginPath(); g.arc(540, 980, 160 + 700 * eo(d / .8), 0, 7); g.stroke(); g.restore(); }
+    txt('一个都没有', 540, 1330, 64, { w: 900, a: ss(SC.zero.cues.none, SC.zero.cues.none + .2, t) }); },
+  hundred(t) { const s = SC.hundred; txt('最接近平均的那个人', 540, 500, 46, { w: 800, a: ss(s.start, s.start + .3, t) });
+    const shown = ss(s.cues.h100 - .1, s.cues.h100 + 1.2, t), colored = ss(s.cues.h62, s.cues.h62 + 1.0, t);
+    const kind = r => r < 62 ? 0 : r < 91 ? 1 : 2; const cols = [C.gold, C.blue, C.red];
+    const order = [...Array(100).keys()].sort((a, b) => rnd(a * 4.3) - rnd(b * 4.3));
+    order.forEach((cell, rank) => { const x = 210 + (cell % 10) * 68, y = 600 + Math.floor(cell / 10) * 68; if (rank / 100 > shown) return;
+      const kd = kind(rank); g.fillStyle = colored > rank / 100 ? cols[kd] : '#3a4152'; rr(x, y, 56, 56, 8, g.fillStyle); });
+    const lg = ss(s.cues.rest - .3, s.cues.rest + .3, t) || colored * .999;
+    [['落在中间', 62, C.gold], ['偏小', 29, C.blue], ['偏大', 9, C.red]].forEach(([n, v, c], i) => { const x = 230 + i * 310;
+      txt(String(v), x, 1350, 84, { serif: true, w: 900, c, a: colored }); txt(n, x, 1430, 32, { c: C.grey, a: colored }); });
+    txt('100 项测量', 540, 1520, 30, { c: C.grey, a: shown }); },
+  quote(t) { const s = SC.quote, k = pop(t, s.start + .1); g.save(); g.translate(540, 950); g.scale(k, k);
+    txt('“', -330, -230, 200, { serif: true, c: C.gold, w: 900 });
+    txt('「平均人」是一个', 0, -90, 66, { serif: true, w: 900 }); txt('误导人的、[虚幻]的概念', 0, 10, 66, { serif: true, w: 900 });
+    txt('a misleading and illusory concept', 0, 110, 32, { serif: true, c: C.grey, w: 400, a: ss(s.cues.q, s.cues.q + .4, t) });
+    txt('— Daniels, 1952 · 美国空军技术报告', 0, 200, 30, { c: C.grey, a: ss(s.cues.q, s.cues.q + .4, t) }); g.restore(); },
+  adjust(t) { const s = SC.adjust, on = ss(s.cues.adj, s.cues.adj + .5, t), wig = on * Math.sin((t - s.cues.adj) * 3) * 40;
+    seat(t, ss(s.start, s.start + .4, t), { dx: wig, pedal: -wig * 1.5, col: on > .5 ? C.blue : C.gold });
+    arrows(420, 1420, on, t);
+    txt(on > .5 ? '{能调}的驾驶舱' : '照着平均做 = 谁都[不合身]', 540, 560, 48, { w: 900, a: ss(s.start + .2, s.start + .5, t) });
+    txt('今天：上车先调座椅', 540, 1520, 40, { c: C.ink, w: 700, a: ss(s.cues.car, s.cues.car + .3, t) }); },
+  flip(t) { const s = SC.flip, sl = s.cues.slam, d = t - sl;
+    txt('不是飞行员不合标准', 540, 800, 58, { w: 800, a: ss(s.start, s.start + .3, t) * (d > 0 ? .5 : 1) });
+    if (d >= 0) { const k = 1 + .7 * (1 - spring(d, 10, .9)); g.save(); g.translate(540, 1040); g.scale(k, k);
+      txt('{「标准」}', 0, -40, 120, { serif: true, w: 900 }); txt('本来就[不存在]', 0, 110, 110, { serif: true, w: 900 }); g.restore();
+      if (d < .8) { g.save(); g.strokeStyle = `rgba(242,193,78,${.8 * (1 - d / .8)})`; g.lineWidth = 6; g.beginPath(); g.arc(540, 1040, 160 + 700 * eo(d / .8), 0, 7); g.stroke(); g.restore(); } } },
+  life(t) { const s = SC.life; ['平均身高', '平均作息', '平均工资', '多大该结婚', '多大该买房'].forEach((n, i) => {
+      const t0 = s.cues['c' + (i + 1)], k = pop(t, t0); if (k <= 0) return; g.save(); g.translate(500, 600 + i * 165); g.scale(k, k);
+      rr(-300, -58, 600, 116, 18, 'rgba(255,255,255,.04)', C.gold, 2); txt('📏', -230, 0, 50); txt(n, 30, 0, 52, { w: 800 }); g.restore(); }); },
+  measure(t) { const s = SC.measure; ['平均身高', '平均作息', '平均工资', '多大该结婚', '多大该买房'].forEach((n, i) => {
+      g.save(); g.translate(500, 600 + i * 165); rr(-300, -58, 600, 116, 18, 'rgba(255,255,255,.03)', C.dim, 2); txt(n, 30, 0, 52, { w: 800, c: C.grey });
+      const t0 = s.start + .3 + i * .4; if (t > t0) { g.strokeStyle = C.red; g.lineWidth = 8; g.beginPath(); g.moveTo(-280, 0); g.lineTo(-280 + 560 * eo((t - t0) / .3), 0); g.stroke(); }
+      g.restore(); });
+    if (t > s.cues.none) { txt('4063 → {0}', 540, 1460, 72, { serif: true, w: 900, a: ss(s.cues.none, s.cues.none + .3, t) }); } },
+  fit(t) { const s = SC.fit, k = ss(s.start, s.cues.seat + .6, t);
+    seat(t, 1, { dx: lerp(-60, 30, eo(k)), pedal: lerp(80, -20, eo(k)), col: C.blue }); person(470 + lerp(-60, 30, eo(k)), 900, 160, 'rgba(242,193,78,.85)', 1);
+    txt('合身', 540, 520, 90, { serif: true, w: 900, c: C.gold }); txt('是把座椅，调到适合[你]的位置', 540, 1460, 50, { w: 800, a: ss(s.cues.seat - .2, s.cues.seat + .2, t) }); },
+  end(t) { const s = SC.end, k = .9 + .1 * spring(t - s.start, 12, .8); g.save(); g.translate(540, 900); g.scale(k, k);
+    txt('你身上，', 0, -90, 96, { serif: true, w: 900 }); txt('哪一项最{「不平均」}？', 0, 40, 96, { serif: true, w: 900 }); g.restore();
+    txt('评论区说说', 540, 1160, 44, { c: C.grey, a: ss(s.start + .6, s.start + 1, t) });
+    [...Array(9).keys()].forEach(i => person(220 + i * 80, 1340, 44 + (i % 3) * 14 - (i % 2) * 8, i === 4 ? C.gold : '#4a5266', 1)); },
+};
+
+function frame(t) {
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  // subtle grid texture
+  g.strokeStyle = 'rgba(255,255,255,.025)'; g.lineWidth = 1; for (let x = 0; x < W; x += 60) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  TL.scenes.forEach((s, i) => { const sc = SC[s.name], hardIn = CLIMAX.includes(sc.start) || i === 0, hardOut = CLIMAX.includes(sc.end);
+    if (t < sc.start - .001 || t >= sc.end + (hardOut ? 0 : .25)) return;
+    const a = Math.min(hardIn ? 1 : clamp((t - sc.start) / .25), t < sc.end ? 1 : clamp((sc.end + .25 - t) / .25));
+    if (a <= 0) return; g.save(); g.globalAlpha = a; BODY[s.name](t); g.restore(); });
+  header(t);
+  if (!COVER) subs(t);
+  CLIMAX.forEach(c => { if (t > c - .75 && t < c) { g.fillStyle = `rgba(0,0,0,${.7 * ss(c - .75, c - .1, t)})`; g.fillRect(0, 0, W, H); } });
+  const vg = g.createRadialGradient(W / 2, H / 2, H * .3, W / 2, H / 2, H * .75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+}
+window.ready = false;
+window.render = function (t) {
+  for (const c of CLIMAX) if (t >= c - .1 && t < c) t = c - .1;
+  g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0); frame(t);
+};
+document.fonts.ready.then(() => { window.render(0); window.ready = true; });
+</script></body></html>

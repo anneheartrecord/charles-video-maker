@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Horizontal explainer</title>
+<style>html,body{margin:0;background:#111113;overflow:hidden}canvas{display:block}</style>
+<script src="timeline.js"></script>
+</head><body><canvas id="c"></canvas>
+<script src="stage.js"></script>
+<script>
+// Minimal example: hook → evidence → climax → question. Copy this folder into the project, run the voiceover
+// pipeline (it overwrites timeline.js; the one here is a hand-made sample), then replace EP below.
+// Every scene is drawn from t only; cue times come from audio/scenes.json, e.g. c.n23 is when "23 个人" is spoken.
+const EP = {
+  title: '为什么才 {23} 个人，就有[一半]概率撞生日？',
+  hard: ['hook', 'climax'],
+  climax: ['climax'],
+  sections: [['pairs', 'pairs', '真正在比的是什么']],
+  scenes: {
+    hook(t, c) {   // frame 0 is already a full picture: people in a row, the number lands as it is spoken
+      stage();
+      const z = 1 + .06 * ss(0, c.half, t);   // slow push-in from frame 0, not a fade from black
+      g.save(); g.translate(W / 2, 700); g.scale(z, z); g.translate(-W / 2, -700);
+      for (let i = 0; i < 23; i++) { const lit = i === 5 || i === 17, x = 230 + i * 66, y = 760 + (i % 2) * 40 - (lit ? 30 * pop(t, c.n23) : 0); figure(x, y, .42, lit ? C.gold : C.fig, 'stand', t); }
+      g.restore();
+      slam(t, c.half, '50.7%', W / 2, 420, 200, C.gold);
+    },
+    pairs(t, c) {
+      stage(); const n = Math.round(counter(t, c.link, 0, 253, 1.4));
+      const pts = Array.from({ length: 23 }, (_, i) => [W / 2 + Math.cos(i / 23 * 6.283) * 330, 560 + Math.sin(i / 23 * 6.283) * 330]);
+      const k = ss(c.link, c.link + 1.4, t), L = Math.floor(253 * k); let m = 0;
+      for (let i = 0; i < 23; i++) for (let j = i + 1; j < 23; j++) if (m++ < L) line(pts[i][0], pts[i][1], pts[j][0], pts[j][1], C.red, 1.2, .35);
+      pts.forEach(([x, y], i) => dot(x, y, 12, i === 0 ? C.gold : C.white, 1, i === 0 ? 24 : 0));
+      txt(`{${n}} 对`, W / 2, 560, 96, C.white, 'center', 900, ss(c.link, c.link + .3, t));
+    },
+    climax(t, c) { stage(W / 2, 1.4); slam(t, c.start, '253 对', W / 2, 470, 220, C.gold, 50); stamp(t, c.again, '不是巧合', W / 2 + 520, 680, C.red); },
+    end(t, c) { stage(); txt('你身边，有同一天{生日}的人吗？', W / 2, 520, 72, C.white, 'center', 900, ss(c.start, c.start + .4, t)); txt('评论区说说', W / 2, 640, 40, C.grey, 'center', 600, ss(c.ask, c.ask + .3, t)); },
+  },
+  cover(w, h) {   // ?cover=1 → 1080×1440, ?cover=43 → 1440×1080; same title as the video, readable at 360 px wide
+    stage(w / 2, 1.2);
+    const fs = Math.min(w * .095, h * .09);   // sized by both sides, so the 4:3 cover does not overlap its two lines
+    txt('为什么才 {23} 个人', w / 2, h * .14, fs, C.white, 'center', 900);
+    txt('就有[一半]概率撞生日？', w / 2, h * .14 + fs * 1.35, fs, C.white, 'center', 900);
+    for (let i = 0; i < 9; i++) figure(w / 2 + (i - 4) * w * .1, h * .82, w / 1800, i === 3 || i === 6 ? C.gold : C.fig);
+    txt('{50.7%}', w / 2, h * .5, w * .12, C.gold, 'center', 900, 1, 30);
+  },
+};
+startEpisode(EP);
+</script></body></html>

@@ -93,9 +93,13 @@ D-1 topic radar ──► D1 distill style ──► D2 sources & script ──�
 | **Script** | `gemini_copy.py` hands narration and title to a local Gemini; the skill checks facts and structure |
 | **Still check** | `still_check.py` finds stretches where the picture stops for more than 2 seconds, and subtitle changes the picture doesn't follow |
 | **Publishing and stats** | `douyin_publish.py` schedules the video, `douyin_stats.py` pulls 2-second bounce, 5-second completion, likes, saves and shares, `douyin_comments.py` saves comments |
-| **Series** | `douyin-series.md` turns one-offs into a series with one world and one recurring character |
+| **Read-back check** | `say_check.py` compares the script with the transcript and lists numbers and words the TTS swallowed or misread |
+| **Opening mix** | `mix.py --open-boost --open-lift` makes the first 3 seconds about 3 dB louder while the music stays clear of the first line |
+| **Styles and templates** | `styles/` holds five distilled looks, `templates/horizontal-explainer/` a landscape skeleton, `templates/douyin-cover/` 3:4 and 4:3 covers |
+| **Batches** | `douyin-batch.md`: one sub-agent per video; the main agent assigns, reviews and schedules one at a time |
+| **Series** | `douyin-series.md` records the series approach and the current one-video-at-a-time rule |
 
-You set up two things yourself: a working directory (default `~/Desktop/video/vibe-video/`) for source videos, the style library and projects, and an ops handbook you maintain for topic rules and findings. Without the handbook, videos still come out; the read-the-handbook and write-back steps are skipped.
+You set up two things yourself: a working directory for source videos, the style library and projects (env `DOUYIN_WORKDIR`, default `~/Desktop/video/vibe-video/`), and an ops handbook you maintain for topic rules and findings (env `DOUYIN_HANDBOOK`). The Douyin login state lives where `DOUYIN_PROFILE` and `DOUYIN_COOKIES` point, by default under `~/.config/douyin/`, and never leaves your machine. Without the handbook, videos still come out; the read-the-handbook and write-back steps are skipped.
 
 ## More results
 
@@ -154,9 +158,10 @@ skills/charles-video-maker/
   SKILL.md        routing (video / figure / machine explainer / Douyin) + four choices + the video workflow
   references/     plans, brief, craft rules, cover and opening, voiceover, fact-check, machines, footage, styles, Douyin mode
   scripts/        rendering, fact-check, QA sheet, audio tools, Douyin radar / publish / stats / comments, Gemini script, still check
-  scripts/voice/  voice, alignment, timeline and subtitles, mix, sampled scores
+  scripts/voice/  voice, alignment, read-back check, timeline and subtitles, mix, sampled scores
   scripts/footage/recording, source quotes, b-roll, generated stills, compositing
-  templates/      vertical explainer template
+  templates/      vertical and landscape explainer templates, Douyin covers
+  styles/         Douyin style library (five looks)
   bridge/         virtual clock, video overlay, page wrapper
   anatomy/        Anatomy, vendored unmodified
 examples/         images for this README
